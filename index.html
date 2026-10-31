@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<title>Cougar Campus — 74th Ward Games</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+    background: #061a36; color: #f0f4ff;
+    display: flex; flex-direction: column; align-items: center;
+    min-height: 100%; overflow: hidden; touch-action: none;
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
+  }
+  header {
+    width: 100%; max-width: 1100px;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 16px; gap: 12px;
+  }
+  header h1 { font-size: 1.3rem; font-weight: 800; color: #f5c842; white-space: nowrap; }
+  header h1 span { color: #9ab0d4; font-weight: 500; font-size: .85rem; margin-left: 8px; }
+  .hud { display: flex; gap: 18px; align-items: baseline; font-variant-numeric: tabular-nums; }
+  .hud b { color: #f5c842; }
+
+  #stage { position: relative; width: var(--w); height: var(--h); border-radius: 10px; overflow: hidden;
+           box-shadow: 0 10px 40px rgba(0,0,0,.5); background: #efece4; }
+  #stage #map { position: absolute; left: 0; top: 0; display: block; pointer-events: none; transform-origin: 0 0; max-width: none; }
+  #stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #near { position: absolute; left: 10px; bottom: 10px; z-index: 2; pointer-events: none;
+          background: rgba(6,26,54,.75); color: #f5c842; font-weight: 600; font-size: .8rem;
+          padding: 4px 10px; border-radius: 999px; max-width: 80%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #near:empty { display: none; }
+
+  /* station sheet */
+  #sheet { position: absolute; left: 50%; bottom: 12px; transform: translate(-50%, 140%); z-index: 4;
+           width: min(420px, calc(100% - 20px)); background: #0b2a55; border: 2px solid #f5c842; border-radius: 16px;
+           padding: 12px 14px; box-shadow: 0 8px 30px rgba(0,0,0,.5); transition: transform .22s ease; }
+  #sheet.show { transform: translate(-50%, 0); }
+  #sheet h3 { color: #f5c842; font-size: 1.05rem; margin-bottom: 8px; }
+  .game-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid rgba(255,255,255,.1); }
+  .game-row .ic { font-size: 1.6rem; width: 34px; text-align: center; }
+  .game-row .nm { flex: 1; font-weight: 700; }
+  .game-row .nm small { display: block; font-weight: 400; color: #9ab0d4; font-size: .75rem; }
+  .game-row button, .btn { border: 0; border-radius: 999px; cursor: pointer; font-weight: 800; padding: 8px 18px;
+                           background: #f5c842; color: #061a36; font-size: .95rem; }
+  .game-row button:disabled { background: #3a4f73; color: #8ea2c4; cursor: default; }
+
+  /* full overlays (start / end / mini-game) */
+  .overlay { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center;
+             background: rgba(6,26,54,.86); text-align: center; padding: 24px; gap: 10px; }
+  .overlay.hidden { display: none; }
+  .overlay h2 { font-size: 2.1rem; color: #f5c842; font-weight: 900; }
+  .overlay p { color: #c9d6ee; max-width: 470px; line-height: 1.45; }
+  .overlay .btn { margin-top: 10px; padding: 12px 28px; font-size: 1.05rem; }
+
+  #mg { background: #061a36; padding: 0; }
+  #mg canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+  #mg .mg-ui { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+               gap: 10px; padding: 24px; text-align: center; background: rgba(6,26,54,.88); }
+  #mg .mg-ui.hidden { display: none; }
+  #mg .mg-ui .big { font-size: 3.2rem; font-weight: 900; color: #f5c842; }
+  #mg-close { position: absolute; top: 10px; right: 12px; z-index: 2; background: rgba(255,255,255,.15); color: #fff;
+              border: 0; border-radius: 999px; width: 34px; height: 34px; font-size: 1.1rem; cursor: pointer; }
+
+  footer { width: 100%; max-width: 1100px; display: flex; justify-content: space-between; padding: 8px 16px; font-size: .8rem; color: #7f93b8; gap: 12px; }
+
+  body.mobile header { position: fixed; top: 0; left: 0; right: 0; z-index: 6; max-width: none;
+                       padding: 6px 12px; padding-top: max(6px, env(safe-area-inset-top));
+                       background: linear-gradient(rgba(6,26,54,.9), rgba(6,26,54,0)); }
+  body.mobile header h1 { display: none; }
+  body.mobile .hud { width: 100%; justify-content: space-between; text-shadow: 0 1px 3px rgba(0,0,0,.8); }
+  body.mobile .hud b { font-size: 1.35rem; }
+  body.mobile footer { display: none; }
+  body.mobile #stage { border-radius: 0; box-shadow: none; }
+  body.mobile #sheet { bottom: max(12px, env(safe-area-inset-bottom)); }
+  body.mobile #near { bottom: max(10px, env(safe-area-inset-bottom)); }
+  body.mobile .overlay h2 { font-size: 1.7rem; }
+  body.mobile #mg-close { top: auto; bottom: max(14px, env(safe-area-inset-bottom)); right: 14px; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>COUGAR CAMPUS <span>74th Ward Games</span></h1>
+    <div class="hud">
+      <div>POINTS <b id="points">0</b></div>
+    </div>
+  </header>
+
+  <div id="stage">
+    <img id="map" src="map.svg" alt="BYU campus map" />
+    <canvas id="hub"></canvas>
+    <div id="near"></div>
+
+    <div id="sheet"><h3 id="sheet-title"></h3><div id="sheet-games"></div></div>
+
+    <div id="start" class="overlay">
+      <h2>COUGAR CAMPUS</h2>
+      <p>Walk around campus and play mini-games at each spot. Every game earns points, and they all add up.</p>
+      <p style="font-size:.85rem">Tap anywhere on the map to walk there · arrow keys / WASD on desktop</p>
+      <button class="btn" id="start-btn">Start</button>
+    </div>
+
+    <div id="mg" class="overlay hidden">
+      <canvas id="mg-canvas"></canvas>
+      <button id="mg-close" aria-label="Quit mini-game">✕</button>
+      <div class="mg-ui" id="mg-ui"></div>
+    </div>
+  </div>
+
+  <footer>
+    <div>Map © OpenStreetMap contributors (ODbL) · Building codes per BYU</div>
+    <div>Tap to walk · arrows / WASD</div>
+  </footer>
+
+  <script src="data.js"></script>
+  <script src="games.js"></script>
+  <script src="games/scoop.js"></script>
+  <script src="games/fieldgoal.js"></script>
+  <script src="games/tailrun.js"></script>
+  <script src="games/sled.js"></script>
+  <script src="games/scooter.js"></script>
+  <script src="games/qb.js"></script>
+  <script src="games/freethrow.js"></script>
+  <script src="games/climb.js"></script>
+  <script src="games/shush.js"></script>
+  <script src="games/bean.js"></script>
+  <script src="games/bubble.js"></script>
+  <script src="hub.js"></script>
+</body>
+</html>

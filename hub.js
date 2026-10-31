@@ -1,0 +1,423 @@
+/* Cougar Campus hub: walk the BYU walkway network (map + grid from Cougar-Man's data.js)
+   and play mini-games at stations. Free play: points add up across every round. */
+(() => {
+  const D = window.BYU_DATA, G = window.MINIGAMES;
+  const W = D.w, H = D.h, CELL = D.cell;
+  const open = (x, y) => x >= 0 && y >= 0 && x < W && y < H && D.grid[y][x] === '.';
+  const DIRS = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
+  const key = (x, y) => y * W + x;
+  const cx = gx => gx * CELL + CELL / 2, cy = gy => gy * CELL + CELL / 2;
+  const $ = id => document.getElementById(id);
+
+  // ---------- layout / camera (same approach as Cougar-Man) ----------
+  const stage = $('stage'), canvas = $('hub'), ctx = canvas.getContext('2d'), mapImg = $('map');
+  const mapW = D.x1 - D.x0, mapH = D.y1 - D.y0;
+  let S = 1, s = 1, viewW = mapW, viewH = mapH, mobile = false;
+  const cam = { x: NaN, y: NaN };
+  function layout() {
+    mobile = Math.min(innerWidth, innerHeight) < 700 || matchMedia('(pointer: coarse)').matches;
+    document.body.classList.toggle('mobile', mobile);
+    const vh = (window.visualViewport && visualViewport.height) || innerHeight;
+    let stageW, stageH;
+    if (mobile) {
+      stageW = innerWidth; stageH = vh;
+      s = Math.max(stageW / mapW, stageH / mapH, Math.min(stageW, stageH) / (CELL * 15));
+    } else {
+      const availW = Math.min(innerWidth - 16, 1100);
+      const availH = vh - document.querySelector('header').offsetHeight - document.querySelector('footer').offsetHeight - 16;
+      s = Math.max(0.3, Math.min(availW / mapW, availH / mapH));
+      stageW = mapW * s; stageH = mapH * s;
+    }
+    viewW = stageW / s; viewH = stageH / s;
+    stage.style.setProperty('--w', stageW + 'px'); stage.style.setProperty('--h', stageH + 'px');
+    const dpr = devicePixelRatio || 1;
+    canvas.width = Math.round(stageW * dpr); canvas.height = Math.round(stageH * dpr);
+    S = s * dpr;
+    mapImg.style.width = mapW * s + 'px'; mapImg.style.height = mapH * s + 'px';
+    cam.x = cam.y = NaN;
+    resizeMg();
+  }
+  function updateCamera(dt) {
+    const clamp = (v, span, total) => span >= total ? (total - span) / 2 : Math.max(0, Math.min(total - span, v));
+    const gx = clamp(player.x - viewW / 2, viewW, mapW), gy = clamp(player.y - viewH / 2, viewH, mapH);
+    if (isNaN(cam.x)) { cam.x = gx; cam.y = gy; }
+    else { const k = Math.min(1, dt * 7); cam.x += (gx - cam.x) * k; cam.y += (gy - cam.y) * k; }
+    mapImg.style.transform = `translate(${-cam.x * s}px, ${-cam.y * s}px)`;
+  }
+
+  // ---------- grid helpers ----------
+  const openCells = [];
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (open(x, y)) openCells.push({x, y});
+  function nearestOpenLocal(lx, ly) {
+    let best = null, bd = Infinity;
+    for (const c of openCells) { const d = (cx(c.x) - lx) ** 2 + (cy(c.y) - ly) ** 2; if (d < bd) { bd = d; best = c; } }
+    return best;
+  }
+  const nearestOpen = (mx, my) => nearestOpenLocal(mx - D.x0, my - D.y0);
+  const bld = code => D.buildings.find(b => b.code === code);
+  function path(from, to) { // BFS shortest walkway path, returns list of cells after `from`
+    const prev = new Int32Array(W * H).fill(-1), start = key(from.x, from.y), goal = key(to.x, to.y);
+    prev[start] = start; const q = [start];
+    for (let i = 0; i < q.length && prev[goal] < 0; i++) {
+      const k = q[i], x = k % W, y = (k - x) / W;
+      for (const d of DIRS) { const nx = x + d.x, ny = y + d.y, nk = key(nx, ny); if (open(nx, ny) && prev[nk] < 0) { prev[nk] = k; q.push(nk); } }
+    }
+    if (prev[goal] < 0) return [];
+    const out = []; for (let k = goal; k !== start; k = prev[k]) out.push({ x: k % W, y: (k - k % W) / W });
+    return out.reverse();
+  }
+
+  // ---------- stations ----------
+  const hrcn = bld('HRCN'), cone = bld('CONE'), hgb = bld('HGB');
+  const STATIONS = [
+    { id: 'creamery', name: 'The Creamery', icon: '🍦', at: nearestOpen(cone.x, cone.y), games: ['scoop'], off: {x: 0, y: 1.5} },
+    { id: 'stadium', name: 'To LaVell Edwards Stadium', icon: '🏟️', at: nearestOpen(690, D.y0), games: ['fieldgoal', 'tailrun', 'qb'], off: {x: 0, y: 1.5} },
+    { id: 'rockcanyon', name: 'Rock Canyon', icon: '🧗', at: nearestOpen(D.x1, 875), games: ['climb'], off: {x: -1.5, y: -0.6} },
+    { id: 'ymtn', name: 'Y Mountain Trailhead', icon: '⛰️', at: nearestOpen(D.x1, 1000), games: ['sled'], off: {x: -1.5, y: -0.6} },
+    { id: 'testing', name: 'Testing Center (HGB)', icon: '📝', at: nearestOpen(hgb.x, hgb.y), games: ['bubble'], off: {x: 0, y: -1.2} },
+    { id: 'library', name: 'HBLL Library', icon: '📚', at: nearestOpen(bld('HBLL').x, bld('HBLL').y), games: ['shush'], off: {x: 0, y: -1.2} },
+    { id: 'fieldhouse', name: 'Smith Fieldhouse', icon: '🏀', at: nearestOpen(D.x0, bld('SFH').y), games: ['freethrow'], off: {x: 1.5, y: -0.6} },
+    { id: 'bean', name: 'Bean Museum', icon: '🦁', at: nearestOpen(bld('MARB').x, bld('MARB').y), games: ['bean'], off: {x: 0, y: -1.2} },
+    { id: 'wilk', name: 'The Wilk', icon: '🛴', at: nearestOpen(bld('WSC').x, bld('WSC').y), games: ['scooter'], off: {x: 0, y: -1.2} },
+  ];
+  const markerPos = st => ({ x: cx(st.at.x) + st.off.x * CELL, y: cy(st.at.y) + st.off.y * CELL });
+  const START = nearestOpen(hrcn.x, D.y0 + 6); // Heritage Halls, top edge
+
+  // ---------- state ----------
+  const player = { from: {...START}, to: {...START}, t: 1, path: [], speed: 7, x: cx(START.x), y: cy(START.y), dir: {x:0,y:1}, bob: 0 };
+  let state = 'idle', points = 0, plays = 0;
+  const best = {};                  // best score per game this session
+  let atStation = null, tapMarker = null, floaters = [];
+  const held = new Set();
+
+  function updateHud() {
+    $('points').textContent = points.toLocaleString();
+  }
+
+  // ---------- movement ----------
+  const KEYS = { ArrowUp: {x:0,y:-1}, ArrowDown: {x:0,y:1}, ArrowLeft: {x:-1,y:0}, ArrowRight: {x:1,y:0},
+                 w: {x:0,y:-1}, s: {x:0,y:1}, a: {x:-1,y:0}, d: {x:1,y:0} };
+  function heldDir(c) {
+    const ks = [...held].filter(k => KEYS[k]).reverse();
+    for (const k of ks) { const d = KEYS[k]; if (open(c.x + d.x, c.y + d.y)) return d; }
+    // Pac-Man-style turn buffering: keep sliding along the walkway until the held turn opens up
+    if (ks.length && player.dir && open(c.x + player.dir.x, c.y + player.dir.y)) {
+      const d = KEYS[ks[0]]; if (d.x !== -player.dir.x || d.y !== -player.dir.y) return player.dir;
+    }
+    return null;
+  }
+  function walkTo(cell) { player.path = path(player.t >= 1 ? player.to : player.to, cell); tapMarker = { ...cell, t: 1 }; }
+  function movePlayer(dt) {
+    let budget = player.speed * dt;
+    while (budget > 0) {
+      if (player.t >= 1) {
+        player.from = { ...player.to };
+        let next = null;
+        const kd = heldDir(player.from);
+        if (kd) { player.path = []; tapMarker = null; next = { x: player.from.x + kd.x, y: player.from.y + kd.y }; }
+        else if (player.path.length) next = player.path.shift();
+        if (!next) break;
+        player.dir = { x: next.x - player.from.x, y: next.y - player.from.y };
+        player.to = next; player.t = 0;
+      }
+      const step = Math.min(budget, 1 - player.t); player.t += step; budget -= step;
+    }
+    player.x = cx(player.from.x) + (cx(player.to.x) - cx(player.from.x)) * player.t;
+    player.y = cy(player.from.y) + (cy(player.to.y) - cy(player.from.y)) * player.t;
+    const moving = player.t < 1;
+    player.bob = moving ? player.bob + dt * 14 : 0;
+    if (tapMarker && !player.path.length && !moving) tapMarker = null;
+  }
+  function checkStation() {
+    const here = player.t >= 1 ? player.to : null;
+    const st = here ? STATIONS.find(s => Math.abs(s.at.x - here.x) + Math.abs(s.at.y - here.y) <= 1) : null;
+    if (st !== atStation) { atStation = st; showSheet(st); }
+  }
+
+  // ---------- station sheet ----------
+  function showSheet(st) {
+    const sheet = $('sheet');
+    if (!st || state !== 'play') { sheet.classList.remove('show'); return; }
+    $('sheet-title').textContent = `${st.icon} ${st.name}`;
+    const box = $('sheet-games'); box.innerHTML = '';
+    for (const id of st.games) {
+      const g = G[id], row = document.createElement('div'); row.className = 'game-row';
+      const b = best[id] != null ? ` · best ${best[id]}` : '';
+      row.innerHTML = `<div class="ic">${g.icon}</div><div class="nm">${g.name}<small>${g.comingSoon ? 'Coming soon' : g.blurb + b}</small></div>`;
+      const btn = document.createElement('button'); btn.textContent = g.comingSoon ? 'Soon' : 'Play'; btn.disabled = !!g.comingSoon;
+      btn.onclick = () => openMinigame(id);
+      row.appendChild(btn); box.appendChild(row);
+    }
+    sheet.classList.add('show');
+  }
+
+  // ---------- mini-game host ----------
+  const mg = $('mg'), mgCanvas = $('mg-canvas'), mgCtx = mgCanvas.getContext('2d'), mgUi = $('mg-ui');
+  let mgId = null, mgGame = null, mgPhase = null, mgCount = 0, mgW = 0, mgH = 0;
+  function resizeMg() {
+    const r = stage.getBoundingClientRect(), dpr = devicePixelRatio || 1;
+    mgW = r.width; mgH = r.height;
+    mgCanvas.width = Math.round(mgW * dpr); mgCanvas.height = Math.round(mgH * dpr);
+    mgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  function openMinigame(id) {
+    const g = G[id]; if (!g || g.comingSoon || state !== 'play') return;
+    mgId = id; mgGame = null; mgPhase = 'intro';
+    $('sheet').classList.remove('show');
+    held.clear(); player.path = [];
+    mg.classList.remove('hidden'); resizeMg();
+    mgUi.classList.remove('hidden');
+    mgUi.innerHTML = `<div style="font-size:3rem">${g.icon}</div><h2>${g.name}</h2><p>${g.howTo}</p>
+      <button class="btn" id="mg-go">Go!</button>`;
+    $('mg-go').onclick = () => { initAudio(); mgPhase = 'count'; mgCount = 3; mgUi.classList.add('hidden'); sfx('beep'); };
+  }
+  function closeMinigame() {
+    mg.classList.add('hidden'); mgId = null; mgGame = null; mgPhase = null;
+    atStation = null; checkStation();
+  }
+  function finishMinigame(raw, detail) {
+    if (mgPhase !== 'play') return;
+    mgPhase = 'result';
+    const earned = Math.max(0, Math.round(raw));
+    points += earned; plays++;
+    best[mgId] = Math.max(best[mgId] || 0, raw);
+    floaters.push({ text: `+${earned}`, x: player.x, y: player.y - CELL, t: 1.6 });
+    updateHud(); sfx('win');
+    mgUi.classList.remove('hidden');
+    mgUi.innerHTML = `<div>${detail || ''}</div><div class="big">+${earned}</div>
+      <p>Total: <b style="color:#f5c842">${points.toLocaleString()}</b></p>
+      <div style="display:flex;gap:10px">
+        <button class="btn" id="mg-again">Play again</button>
+        <button class="btn" id="mg-back" style="background:#3fd8ff">Back to campus</button>
+      </div>`;
+    $('mg-again').onclick = () => openMinigame(mgId);
+    $('mg-back').onclick = closeMinigame;
+  }
+  $('mg-close').onclick = () => { if (mgPhase === 'play' && !confirmQuit()) return; closeMinigame(); };
+  function confirmQuit() { return true; } // quitting mid-round just forfeits that round
+  function updateMinigame(dt) {
+    if (mgPhase === 'count') {
+      const before = Math.ceil(mgCount); mgCount -= dt;
+      if (Math.ceil(mgCount) !== before && mgCount > 0) sfx('beep');
+      if (mgCount <= 0) {
+        mgPhase = 'play'; sfx('go');
+        mgGame = G[mgId].create({ finish: finishMinigame, sfx, data: D, mapImg, get W() { return mgW; }, get H() { return mgH; } });
+      }
+    } else if (mgPhase === 'play' && mgGame) mgGame.update(dt);
+  }
+  function drawMinigame() {
+    if (!mgId) return;
+    mgCtx.clearRect(0, 0, mgW, mgH);
+    if (mgGame) mgGame.draw(mgCtx, mgW, mgH);
+    else { mgCtx.fillStyle = '#061a36'; mgCtx.fillRect(0, 0, mgW, mgH); }
+    if (mgPhase === 'count') {
+      mgCtx.fillStyle = '#f5c842'; mgCtx.font = `900 ${Math.min(mgW, mgH) * 0.3}px sans-serif`;
+      mgCtx.textAlign = 'center'; mgCtx.textBaseline = 'middle';
+      mgCtx.fillText(String(Math.ceil(mgCount)), mgW / 2, mgH / 2); mgCtx.textBaseline = 'alphabetic';
+    }
+  }
+  mgCanvas.addEventListener('pointerdown', e => {
+    if (mgPhase !== 'play' || !mgGame) return;
+    const r = mgCanvas.getBoundingClientRect();
+    mgGame.tap(e.clientX - r.left, e.clientY - r.top);
+  });
+  mgCanvas.addEventListener('pointermove', e => { if (mgPhase === 'play' && mgGame && mgGame.move) { const r = mgCanvas.getBoundingClientRect(); mgGame.move(e.clientX - r.left, e.clientY - r.top, e.buttons > 0 || e.pointerType === 'touch'); } });
+  mgCanvas.addEventListener('pointerup', e => { if (mgGame && mgGame.release) { const r = mgCanvas.getBoundingClientRect(); mgGame.release(e.clientX - r.left, e.clientY - r.top); } });
+
+  // ---------- session ----------
+  function startSession() {
+    initAudio();
+    state = 'play';
+    $('start').classList.add('hidden');
+    atStation = null; updateHud(); checkStation(); sfx('go');
+  }
+  $('start-btn').onclick = startSession;
+
+  // ---------- input ----------
+  addEventListener('keydown', e => {
+    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    if (mgId) {
+      if (mgPhase === 'play' && mgGame) {
+        if (mgGame.key) { if (KEYS[k] || k === ' ' || k === 'Enter') e.preventDefault(); mgGame.key(k, true, e.repeat); }
+        else if ((k === ' ' || k === 'Enter') && !e.repeat) { e.preventDefault(); mgGame.tap(mgW / 2, mgH / 2); }
+      }
+      return;
+    }
+    if (KEYS[k]) { e.preventDefault(); held.delete(k); held.add(k); }
+    if ((k === 'Enter' || k === ' ') && state === 'play' && atStation) {
+      const g = atStation.games.find(id => !G[id].comingSoon); if (g) { e.preventDefault(); openMinigame(g); }
+    }
+  });
+  addEventListener('keyup', e => { const k = e.key.length === 1 ? e.key.toLowerCase() : e.key; held.delete(k); if (mgId && mgPhase === 'play' && mgGame && mgGame.key) mgGame.key(k, false, false); });
+  addEventListener('blur', () => held.clear());
+  let down = null;
+  canvas.addEventListener('pointerdown', e => { down = { x: e.clientX, y: e.clientY }; initAudio(); });
+  canvas.addEventListener('pointerup', e => {
+    if (!down || state !== 'play') return;
+    const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y); down = null;
+    if (moved > 14) return;
+    const r = canvas.getBoundingClientRect();
+    const hx = e.clientX - r.left, hy = e.clientY - r.top;
+    const hint = edgeHints.find(h => Math.hypot(h.x - hx, h.y - hy) < h.r);
+    if (hint) { walkTo(hint.st.at); return; }
+    const lx = cam.x + (e.clientX - r.left) / s, ly = cam.y + (e.clientY - r.top) / s;
+    // tapping a station icon walks to that station
+    const st = STATIONS.find(st => { const m = markerPos(st); return Math.hypot(m.x - lx, m.y - ly) < CELL * 1.6; });
+    walkTo(st ? st.at : nearestOpenLocal(lx, ly));
+  });
+
+  // ---------- drawing ----------
+  function draw(now) {
+    ctx.setTransform(S, 0, 0, S, -cam.x * S, -cam.y * S);
+    ctx.clearRect(cam.x, cam.y, viewW, viewH);
+    // walkways
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(0,46,93,0.22)'; ctx.lineWidth = CELL * 0.55;
+    ctx.beginPath();
+    for (const c of openCells) {
+      if (open(c.x + 1, c.y)) { ctx.moveTo(cx(c.x), cy(c.y)); ctx.lineTo(cx(c.x + 1), cy(c.y)); }
+      if (open(c.x, c.y + 1)) { ctx.moveTo(cx(c.x), cy(c.y)); ctx.lineTo(cx(c.x), cy(c.y + 1)); }
+    }
+    ctx.stroke();
+    // planned route
+    if (player.path.length) {
+      ctx.strokeStyle = 'rgba(245,200,66,.75)'; ctx.lineWidth = CELL * 0.18; ctx.setLineDash([CELL * 0.3, CELL * 0.35]);
+      ctx.beginPath(); ctx.moveTo(player.x, player.y);
+      for (const c of player.path) ctx.lineTo(cx(c.x), cy(c.y));
+      ctx.stroke(); ctx.setLineDash([]);
+    }
+    if (tapMarker) {
+      ctx.strokeStyle = '#f5c842'; ctx.lineWidth = 1.5;
+      const r = CELL * (0.4 + 0.15 * Math.sin(now / 120));
+      ctx.beginPath(); ctx.arc(cx(tapMarker.x), cy(tapMarker.y), r, 0, 7); ctx.stroke();
+    }
+    // stations
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (const st of STATIONS) {
+      const m = markerPos(st), x = m.x, y = m.y + Math.sin(now / 300 + st.at.x) * CELL * 0.12;
+      const playable = st.games.some(id => !G[id].comingSoon);
+      ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.beginPath(); ctx.ellipse(cx(st.at.x), cy(st.at.y), CELL * 0.6, CELL * 0.25, 0, 0, 7); ctx.fill();
+      ctx.strokeStyle = playable ? '#f5c842' : '#9ab0d4'; ctx.lineWidth = 2;
+      ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(x, y, CELL * 1.05, 0, 7); ctx.fill(); ctx.stroke();
+      if (playable) { ctx.globalAlpha = 0.5 + 0.5 * Math.sin(now / 250); ctx.beginPath(); ctx.arc(x, y, CELL * 1.35, 0, 7); ctx.stroke(); ctx.globalAlpha = 1; }
+      ctx.font = `${CELL * 1.2}px sans-serif`; ctx.fillStyle = '#000'; ctx.fillText(st.icon, x, y + CELL * 0.05);
+      ctx.font = `800 ${CELL * 0.62}px sans-serif`; ctx.lineWidth = 2.5; ctx.strokeStyle = '#061a36'; ctx.fillStyle = '#f5c842';
+      const label = st.name.replace('To ', '').replace(' (HGB)', '');
+      const half = ctx.measureText(label).width / 2 + 2;
+      const lx = Math.max(half, Math.min(mapW - half, x)), ly = st.off.y > 0 ? y + CELL * 1.85 : y - CELL * 1.75;
+      ctx.strokeText(label, lx, ly); ctx.fillText(label, lx, ly);
+    }
+    // player (placeholder avatar until ward-member characters are added)
+    const bob = Math.abs(Math.sin(player.bob)) * CELL * 0.18, r = CELL * 0.55;
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(player.x, player.y + r * 0.8, r * 0.8, r * 0.3, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#002e5d'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.arc(player.x, player.y - bob, r, 0, 7); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = `900 ${CELL * 0.7}px sans-serif`; ctx.fillText('Y', player.x, player.y - bob + CELL * 0.04);
+    ctx.fillStyle = '#f5c842'; ctx.beginPath(); ctx.arc(player.x + player.dir.x * r * 0.9, player.y - bob + player.dir.y * r * 0.9, r * 0.22, 0, 7); ctx.fill();
+    // floating point popups
+    for (const f of floaters) {
+      ctx.globalAlpha = Math.min(1, f.t); ctx.font = `900 ${CELL * 1.1}px sans-serif`;
+      ctx.strokeStyle = '#061a36'; ctx.lineWidth = 3; ctx.fillStyle = '#f5c842';
+      ctx.strokeText(f.text, f.x, f.y); ctx.fillText(f.text, f.x, f.y); ctx.globalAlpha = 1;
+    }
+    ctx.textBaseline = 'alphabetic';
+    drawEdgeHints(now);
+  }
+
+  // phone helper: stations that are off-screen get a little icon pinned to the screen edge, pointing toward them
+  let edgeHints = [];
+  function drawEdgeHints(now) {
+    edgeHints = [];
+    if (!mobile || state !== 'play') return;
+    const vw = viewW * s, vh = viewH * s, pad = 30, top = 64, bottom = vh - 30;
+    const pcx = vw / 2, pcy = (top + bottom) / 2; // rays start at the screen center
+    const dpr = devicePixelRatio || 1;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    for (const st of STATIONS) {
+      const m = markerPos(st), sx = (m.x - cam.x) * s, sy = (m.y - cam.y) * s;
+      if (sx > 10 && sx < vw - 10 && sy > top && sy < vh - 10) continue; // visible already
+      // clamp the ray from the player to the station onto the screen rectangle
+      const dx = sx - pcx, dy = sy - pcy;
+      let k = 1;
+      if (sx < pad) k = Math.min(k, (pad - pcx) / dx);
+      if (sx > vw - pad) k = Math.min(k, (vw - pad - pcx) / dx);
+      if (sy < top + pad) k = Math.min(k, (top + pad - pcy) / dy);
+      if (sy > bottom - pad) k = Math.min(k, (bottom - pad - pcy) / dy);
+      let ex = pcx + dx * k, ey = pcy + dy * k;
+      ex = Math.max(pad, Math.min(vw - pad, ex)); ey = Math.max(top + pad, Math.min(bottom - pad, ey));
+      // nudge apart hints that would overlap an earlier one
+      for (const h of edgeHints) if (Math.hypot(h.x - ex, h.y - ey) < 40) { if (ex <= pad + 1 || ex >= vw - pad - 1) ey += ey < h.y ? -40 : 40; else ex += ex < h.x ? -40 : 40; }
+      const ang = Math.atan2(dy, dx);
+      const r = 17;
+      ctx.globalAlpha = 0.92;
+      ctx.fillStyle = '#0b2a55'; ctx.strokeStyle = '#f5c842'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(ex, ey, r, 0, 7); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#f5c842'; ctx.beginPath();
+      ctx.moveTo(ex + Math.cos(ang) * (r + 9), ey + Math.sin(ang) * (r + 9));
+      ctx.lineTo(ex + Math.cos(ang + 0.45) * (r + 1), ey + Math.sin(ang + 0.45) * (r + 1));
+      ctx.lineTo(ex + Math.cos(ang - 0.45) * (r + 1), ey + Math.sin(ang - 0.45) * (r + 1));
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.font = '18px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#000';
+      ctx.fillText(st.icon, ex, ey + 1);
+      edgeHints.push({ st, x: ex, y: ey, r: r + 8 });
+    }
+    ctx.textBaseline = 'alphabetic';
+  }
+
+  let nearCode = '';
+  function updateNear() {
+    const px = player.x + D.x0, py = player.y + D.y0;
+    let bestB = null, bd = 55 * 55;
+    for (const b of D.buildings) { if (!b.code) continue; const d = (b.x - px) ** 2 + (b.y - py) ** 2; if (d < bd) { bd = d; bestB = b; } }
+    const code = bestB ? bestB.code : '';
+    if (code !== nearCode) { nearCode = code; $('near').textContent = bestB ? `${bestB.code} — ${bestB.name}` : ''; }
+  }
+
+  // ---------- tiny synth sfx ----------
+  let AC = null;
+  function initAudio() { if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } if (AC && AC.state === 'suspended') AC.resume(); }
+  let lastTap = 0;
+  function sfx(kind) {
+    // phones: a little haptic buzz on hits / misses (Android; iPhones ignore this)
+    try { if (navigator.vibrate) { if (kind === 'hit' || kind === 'bad') navigator.vibrate(40); else if (kind === 'win') navigator.vibrate([20, 40, 20]); } } catch (e) {}
+    if (!AC) return;
+    const t = AC.currentTime;
+    const tone = (f0, f1, dur, type = 'square', vol = 0.05, at = 0) => {
+      const o = AC.createOscillator(), g = AC.createGain();
+      o.type = type; o.frequency.setValueAtTime(f0, t + at); o.frequency.exponentialRampToValueAtTime(f1, t + at + dur);
+      g.gain.setValueAtTime(vol, t + at); g.gain.exponentialRampToValueAtTime(0.0001, t + at + dur);
+      o.connect(g).connect(AC.destination); o.start(t + at); o.stop(t + at + dur + 0.02);
+    };
+    switch (kind) {
+      case 'tap': if (t - lastTap < 0.04) return; lastTap = t; tone(260 + Math.random() * 60, 140, 0.06, 'triangle', 0.06); break;
+      case 'bad': tone(180, 90, 0.2, 'sawtooth', 0.06); break;
+      case 'freeze': tone(1400, 2200, 0.25, 'sine', 0.05); tone(1800, 2600, 0.25, 'sine', 0.03, 0.08); break;
+      case 'beep': tone(660, 660, 0.12, 'square', 0.05); break;
+      case 'go': tone(990, 990, 0.25, 'square', 0.06); break;
+      case 'win': [523, 659, 784, 1047].forEach((f, i) => tone(f, f, 0.14, 'square', 0.05, i * 0.1)); break;
+      case 'coin': tone(988, 1319, 0.1, 'square', 0.04); break;
+      case 'hit': tone(160, 60, 0.25, 'sawtooth', 0.07); break;
+      case 'whoosh': tone(300, 1200, 0.18, 'triangle', 0.04); break;
+      case 'thud': tone(120, 50, 0.15, 'square', 0.07); break;
+    }
+  }
+
+  // ---------- loop ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    if (!mgId) { movePlayer(dt); if (state === 'play') checkStation(); updateNear(); }
+    else updateMinigame(dt);
+    floaters = floaters.filter(f => (f.t -= dt, f.y -= dt * CELL * 1.2, f.t > 0));
+    updateCamera(dt); draw(now); drawMinigame();
+    requestAnimationFrame(frame);
+  }
+  addEventListener('resize', layout);
+  if (window.visualViewport) visualViewport.addEventListener('resize', layout);
+  layout(); updateHud();
+  // debug hook for automated tests
+  window.CougarCampus = { get state() { return state; }, get player() { return player; }, get points() { return points; },
+    STATIONS, walkTo, openMinigame, get mg() { return { mgId, mgPhase }; } };
+  requestAnimationFrame(frame);
+})();
