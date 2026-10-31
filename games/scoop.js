@@ -8,7 +8,7 @@ window.MINIGAMES.scoop = {
   blurb: 'Catch & stack scoops',
   howTo: 'Drag (or ←/→) to slide the cone and stack falling scoops. Catch them <b>centered</b> to steady the sway.<br>Dodge 📝 tests & 🅿️ tickets (−3 scoops). ✨ Golden scoop = bonus!',
   create(api) {
-    const DUR = 30;
+    const DUR = 18;
     const FLAVORS = [
       ['Graham Canyon', '#d8a35f', '#8a5a2b'],
       ['Cougar Tracks', '#f1e2bf', '#6b3b1f'],

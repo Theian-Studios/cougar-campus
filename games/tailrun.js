@@ -7,7 +7,7 @@ window.MINIGAMES.tailrun = {
   blurb: 'Carry a Cougar Tail past defenders',
   howTo: '<b>Drag</b> (or ←/→) to dodge defenders. Each hit bites your Cougar Tail; 3 bites and it\'s gone!<br>🍁 = speed burst · 🥛 = shield · cross the goal line for a TOUCHDOWN.',
   create(api) {
-    const DUR = 40, TD_BONUS = 150, NEAR_BONUS = 15, PERIOD = 110; // 100-yard field + 10-yard end zone
+    const DUR = 24, TD_BONUS = 150, NEAR_BONUS = 15, PERIOD = 110; // 100-yard field + 10-yard end zone
     let t = 0, done = false, endTimer = -1;
     let dist = 0;                 // yards travelled
     let drive = 0, tds = 0, nearMisses = 0, nearPts = 0, tdPts = 0;

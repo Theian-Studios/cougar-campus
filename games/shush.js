@@ -9,7 +9,7 @@ window.MINIGAMES.shush = {
   blurb: 'Shush the loud ones',
   howTo: 'Tap the <b>loud</b> students (📢 📱 🎧 😂) to SHUSH them — chain shushes for combo bonus.<br>Leave the quiet studiers (📖 💻) alone: tapping them is rude!',
   create(api) {
-    const DUR = 30, BASE = 18, COMBO_STEP = 5, COMBO_MAX = 5, RUDE = 40;
+    const DUR = 18, BASE = 18, COMBO_STEP = 5, COMBO_MAX = 5, RUDE = 40;
     const SKINS = ['#f1c27d', '#e0ac69', '#c68642', '#8d5524', '#ffdbac', '#f3d0b0'];
     const HAIRS = ['#2b1b0e', '#5a3a1a', '#a0522d', '#e6c27a', '#111', '#7a4b2a', '#c0392b'];
     const SHIRTS = ['#e63946', '#2a9d8f', '#f4a261', '#7b5cff', '#0077b6', '#ef476f', '#06d6a0', '#ffd166', '#118ab2'];

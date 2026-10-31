@@ -14,8 +14,10 @@
   const mapW = D.x1 - D.x0, mapH = D.y1 - D.y0;
   let S = 1, s = 1, viewW = mapW, viewH = mapH, mobile = false;
   const cam = { x: NaN, y: NaN };
+  const BOARD = location.hash === '#board';   // projector view: whole map + live leaderboard, no player
+  if (BOARD) document.body.classList.add('board');
   function layout() {
-    mobile = Math.min(innerWidth, innerHeight) < 700 || matchMedia('(pointer: coarse)').matches;
+    mobile = !BOARD && (Math.min(innerWidth, innerHeight) < 700 || matchMedia('(pointer: coarse)').matches);
     document.body.classList.toggle('mobile', mobile);
     const vh = (window.visualViewport && visualViewport.height) || innerHeight;
     let stageW, stageH;
@@ -23,7 +25,7 @@
       stageW = innerWidth; stageH = vh;
       s = Math.max(stageW / mapW, stageH / mapH, Math.min(stageW, stageH) / (CELL * 15));
     } else {
-      const availW = Math.min(innerWidth - 16, 1100);
+      const availW = BOARD ? innerWidth - 16 - 390 : Math.min(innerWidth - 16, 1100);
       const availH = vh - document.querySelector('header').offsetHeight - document.querySelector('footer').offsetHeight - 16;
       s = Math.max(0.3, Math.min(availW / mapW, availH / mapH));
       stageW = mapW * s; stageH = mapH * s;
@@ -81,7 +83,77 @@
     { id: 'wilk', name: 'The Wilk', icon: '🛴', at: nearestOpen(bld('WSC').x, bld('WSC').y), games: ['scooter'], off: {x: 0, y: -1.2} },
   ];
   const markerPos = st => ({ x: cx(st.at.x) + st.off.x * CELL, y: cy(st.at.y) + st.off.y * CELL });
-  const START = nearestOpen(hrcn.x, D.y0 + 6); // Heritage Halls, top edge
+  const degree = c => DIRS.filter(d => open(c.x + d.x, c.y + d.y)).length;
+  const START = (() => { // a walkway junction near Heritage Halls (top edge), so every direction works from the start
+    let best = null, bd = Infinity;
+    for (const c of openCells) { if (degree(c) < 3) continue; const d = (cx(c.x) - (hrcn.x - D.x0)) ** 2 + (cy(c.y) - 30) ** 2; if (d < bd) { bd = d; best = c; } }
+    return best;
+  })();
+
+  // ---------- ward-member characters (optional members.js) ----------
+  const MEMBERS = (window.MEMBERS || []).map(m => ({ ...m, first: m.name.split(' ')[0], img: null }));
+  const photoOf = m => { if (!m.img) { m.img = new Image(); m.img.src = m.photo; } return m.img; }; // load photos only when needed
+  let me = null;          // the member you picked
+  let npcs = [];          // other members walking around (stand-ins for other live players)
+  function drawCharacter(x, y, bobT, dir, m, isMe) {
+    const bob = Math.abs(Math.sin(bobT)) * CELL * 0.14;
+    // shadow on the walkway
+    ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(x, y + CELL * 0.5, CELL * 0.85, CELL * 0.3, 0, 0, 7); ctx.fill();
+    let topY;
+    const img = m && photoOf(m);
+    if (img && img.complete && img.naturalWidth) {
+      // real photo cut-out (head + shoulders), standing on the walkway
+      const H = CELL * 2.5, Wd = H, left = x - Wd / 2, top = y + CELL * 0.55 - H - bob;
+      ctx.save();
+      // outline so the person pops off the map: gold for you, white for others
+      ctx.shadowColor = isMe ? '#f5c842' : 'rgba(255,255,255,.95)'; ctx.shadowBlur = isMe ? 6 : 3;
+      for (const [ox, oy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) ctx.drawImage(img, left + ox * 0.5, top + oy * 0.5, Wd, H);
+      ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
+      ctx.drawImage(img, left, top, Wd, H);
+      ctx.restore();
+      topY = top + H * 0.02;
+    } else {
+      // placeholder avatar (no photo)
+      const R = CELL * 0.6, hy = y - bob - R * 0.3;
+      ctx.fillStyle = '#002e5d'; ctx.strokeStyle = isMe ? '#f5c842' : '#fff'; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.arc(x, hy, R, 0, 7); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.font = `900 ${CELL * 0.75}px sans-serif`; ctx.fillText('Y', x, hy + CELL * 0.05);
+      topY = hy - R;
+    }
+    // name tag
+    if (m) {
+      ctx.font = `800 ${CELL * 0.62}px sans-serif`; const tw = ctx.measureText(m.first).width + CELL * 0.6;
+      const ty = topY - CELL * 0.5;
+      ctx.fillStyle = isMe ? '#f5c842' : 'rgba(6,26,54,.85)';
+      ctx.beginPath(); ctx.roundRect(x - tw / 2, ty - CELL * 0.42, tw, CELL * 0.84, CELL * 0.42); ctx.fill();
+      ctx.fillStyle = isMe ? '#061a36' : '#fff'; ctx.fillText(m.first, x, ty + CELL * 0.03);
+    }
+  }
+  function makeNpc(m, cell) {
+    return { m, from: {...cell}, to: {...cell}, t: 1, path: [], speed: 4 + Math.random() * 1.5, x: cx(cell.x), y: cy(cell.y),
+             dir: {x: 0, y: 1}, bob: 0, wait: 1 + Math.random() * 2 };
+  }
+  function moveNpc(n, dt) {
+    if (n.t >= 1 && !n.path.length) {
+      n.wait -= dt; n.bob = 0;
+      if (n.wait > 0) return;
+      // head to a random station most of the time (like real players), otherwise a random walkway
+      const target = Math.random() < 0.7 ? STATIONS[Math.floor(Math.random() * STATIONS.length)].at : openCells[Math.floor(Math.random() * openCells.length)];
+      n.path = path(n.to, target); n.wait = 2 + Math.random() * 4;
+    }
+    let budget = n.speed * dt;
+    while (budget > 0) {
+      if (n.t >= 1) {
+        n.from = { ...n.to };
+        if (!n.path.length) break;
+        const next = n.path.shift(); n.dir = { x: next.x - n.from.x, y: next.y - n.from.y }; n.to = next; n.t = 0;
+      }
+      const step = Math.min(budget, 1 - n.t); n.t += step; budget -= step;
+    }
+    n.x = cx(n.from.x) + (cx(n.to.x) - cx(n.from.x)) * n.t;
+    n.y = cy(n.from.y) + (cy(n.to.y) - cy(n.from.y)) * n.t;
+    n.bob = n.t < 1 ? n.bob + dt * 12 : 0;
+  }
 
   // ---------- state ----------
   const player = { from: {...START}, to: {...START}, t: 1, path: [], speed: 7, x: cx(START.x), y: cy(START.y), dir: {x:0,y:1}, bob: 0 };
@@ -97,7 +169,25 @@
   // ---------- movement ----------
   const KEYS = { ArrowUp: {x:0,y:-1}, ArrowDown: {x:0,y:1}, ArrowLeft: {x:-1,y:0}, ArrowRight: {x:1,y:0},
                  w: {x:0,y:-1}, s: {x:0,y:1}, a: {x:-1,y:0}, d: {x:1,y:0} };
+  // joystick vector (phones): x,y in -1..1, or null when released
+  let joy = null;
   function heldDir(c) {
+    if (joy) {
+      const ax = Math.abs(joy.x), ay = Math.abs(joy.y);
+      const prim = ax >= ay ? {x: Math.sign(joy.x), y: 0} : {x: 0, y: Math.sign(joy.y)};
+      const sec = ax >= ay ? (ay > 0.3 * ax ? {x: 0, y: Math.sign(joy.y)} : null) : (ax > 0.3 * ay ? {x: Math.sign(joy.x), y: 0} : null);
+      if (open(c.x + prim.x, c.y + prim.y)) return prim;
+      if (sec && open(c.x + sec.x, c.y + sec.y)) return sec;
+      // otherwise follow the walkway that best matches the stick (so you glide around bends instead of stopping)
+      let best = null, bd = -0.15;
+      for (const d of DIRS) {
+        if (!open(c.x + d.x, c.y + d.y)) continue;
+        let dot = (d.x * joy.x + d.y * joy.y) / (Math.hypot(joy.x, joy.y) || 1);
+        if (player.dir && d.x === player.dir.x && d.y === player.dir.y) dot += 0.2; // prefer going straight
+        if (dot > bd) { bd = dot; best = d; }
+      }
+      return best;
+    }
     const ks = [...held].filter(k => KEYS[k]).reverse();
     for (const k of ks) { const d = KEYS[k]; if (open(c.x + d.x, c.y + d.y)) return d; }
     // Pac-Man-style turn buffering: keep sliding along the walkway until the held turn opens up
@@ -166,6 +256,7 @@
     $('sheet').classList.remove('show');
     held.clear(); player.path = [];
     mg.classList.remove('hidden'); resizeMg();
+    joy = null; joyId = null; knob.style.transform = '';
     mgUi.classList.remove('hidden');
     mgUi.innerHTML = `<div style="font-size:3rem">${g.icon}</div><h2>${g.name}</h2><p>${g.howTo}</p>
       <button class="btn" id="mg-go">Go!</button>`;
@@ -180,6 +271,7 @@
     mgPhase = 'result';
     const earned = Math.max(0, Math.round(raw));
     points += earned; plays++;
+    if (NET()) NET().send({ p: points });
     best[mgId] = Math.max(best[mgId] || 0, raw);
     floaters.push({ text: `+${earned}`, x: player.x, y: player.y - CELL, t: 1.6 });
     updateHud(); sfx('win');
@@ -225,10 +317,102 @@
   mgCanvas.addEventListener('pointerup', e => { if (mgGame && mgGame.release) { const r = mgCanvas.getBoundingClientRect(); mgGame.release(e.clientX - r.left, e.clientY - r.top); } });
 
   // ---------- session ----------
+  // ---------- multiplayer (net.js → window.CC_NET) ----------
+  const NET = () => window.CC_NET;
+  const online = () => !!(NET() && NET().ready);
+  const memberById = id => MEMBERS.find(m => m.id === id);
+  const remotes = new Map();   // uid -> { m, x, y, tx, ty, bob, dir, s }
+  function syncRemotes() {
+    if (!online()) return;
+    const ps = NET().players, mine = NET().uid, seen = new Set();
+    for (const uid in ps) {
+      const r = ps[uid];
+      if (uid === mine || !r || !r.on || !r.m || (r.x === 0 && r.y === 0)) continue;
+      seen.add(uid);
+      const tx = r.x * CELL, ty = r.y * CELL;
+      let e = remotes.get(uid);
+      if (!e) { e = { x: tx, y: ty, bob: 0, dir: {x: 0, y: 1} }; remotes.set(uid, e); }
+      e.m = memberById(r.m) || { id: r.m, name: r.n || '?', first: (r.n || '?').split(' ')[0], photo: '' };
+      e.tx = tx; e.ty = ty; e.s = r.s || '';
+    }
+    for (const uid of [...remotes.keys()]) if (!seen.has(uid)) remotes.delete(uid);
+  }
+  function moveRemotes(dt) {
+    for (const e of remotes.values()) {
+      const dx = e.tx - e.x, dy = e.ty - e.y, d = Math.hypot(dx, dy);
+      if (d > CELL * 8) { e.x = e.tx; e.y = e.ty; continue; }          // teleport after a long gap
+      const k = Math.min(1, dt * 8); e.x += dx * k; e.y += dy * k;
+      if (d > 0.5) { e.dir = Math.abs(dx) > Math.abs(dy) ? {x: Math.sign(dx), y: 0} : {x: 0, y: Math.sign(dy)}; e.bob += dt * 12; } else e.bob = 0;
+    }
+  }
+  function goOnline() {   // real players replace the demo wanderers
+    if (!online()) return;
+    npcs = [];
+    if (me && !joinedNet) {
+      joinedNet = true;
+      NET().join(me).then(start => { if (start > points) { points = start; updateHud(); } });
+    }
+    syncRemotes(); renderBoard();
+  }
+  let joinedNet = false;
+  window.addEventListener('cc-net-ready', () => { goOnline(); NET().onChange(() => { syncRemotes(); renderBoard(); }); });
+  if (online()) setTimeout(() => window.dispatchEvent(new Event('cc-net-ready')), 0);
+
+  // live leaderboard (🏆 panel on phones, sidebar on the projector view)
+  function renderBoard() {
+    const box = $('board-list'); if (!box) return;
+    let rows;
+    if (online()) {
+      const ps = NET().players, byMember = {};
+      for (const uid in ps) { const r = ps[uid]; if (!r || !r.m) continue; const cur = byMember[r.m]; if (!cur || (r.p || 0) > (cur.p || 0) || r.on) byMember[r.m] = { ...r, p: Math.max(r.p || 0, cur ? cur.p || 0 : 0), on: r.on || (cur && cur.on) }; }
+      rows = Object.values(byMember).sort((a, b) => (b.p || 0) - (a.p || 0));
+      $('board-status').textContent = `${rows.filter(r => r.on).length} playing now`;
+    } else {
+      rows = me ? [{ m: me.id, n: me.name, p: points, on: true }] : [];
+      $('board-status').textContent = 'Offline: scores aren’t shared';
+    }
+    box.innerHTML = '';
+    rows.slice(0, 100).forEach((r, i) => {
+      const m = memberById(r.m), li = document.createElement('div'); li.className = 'board-row' + (me && r.m === me.id ? ' me' : '');
+      li.innerHTML = `<span class="rank">${i + 1}</span>${m ? `<img src="${m.photo}" alt="">` : '<span class="noimg">Y</span>'}<span class="bn">${(m ? m.name : r.n) || '?'}</span>${r.on ? '<span class="dot" title="playing"></span>' : ''}<b>${(r.p || 0).toLocaleString()}</b>`;
+      box.appendChild(li);
+    });
+  }
+  $('board-btn').onclick = () => { renderBoard(); $('board-panel').classList.toggle('show'); };
+  $('board-close').onclick = () => $('board-panel').classList.remove('show');
+
+  function pickMember(m) {
+    me = m;
+    if (online()) goOnline();
+    else {
+      // offline / not yet connected: a dozen other members wander campus as stand-ins for live players
+      const others = MEMBERS.filter(o => o !== m).sort(() => Math.random() - 0.5).slice(0, 12);
+      npcs = others.map((o, i) => makeNpc(o, STATIONS[i % STATIONS.length].at));
+    }
+    startSession();
+  }
+  if (MEMBERS.length) {
+    const box = $('who'); box.innerHTML = '';
+    const cards = [];
+    for (const m of MEMBERS) {
+      const b = document.createElement('button'); b.className = 'who-card';
+      const img = document.createElement('img'); img.loading = 'lazy'; img.src = m.photo; img.alt = m.name;
+      b.appendChild(img); const sp = document.createElement('span'); sp.textContent = m.name; b.appendChild(sp);
+      b.onclick = () => pickMember(m);
+      box.appendChild(b); cards.push([m.name.toLowerCase(), b]);
+    }
+    $('who-search').addEventListener('input', e => {
+      const q = e.target.value.trim().toLowerCase();
+      for (const [n, b] of cards) b.style.display = !q || n.split(' ').some(w => w.startsWith(q)) || n.startsWith(q) ? '' : 'none';
+    });
+    $('start-btn').style.display = 'none';
+    $('who-wrap').style.display = '';
+  }
   function startSession() {
     initAudio();
     state = 'play';
     $('start').classList.add('hidden');
+    document.body.classList.add('playing');
     atStation = null; updateHud(); checkStation(); sfx('go');
   }
   $('start-btn').onclick = startSession;
@@ -250,6 +434,26 @@
   });
   addEventListener('keyup', e => { const k = e.key.length === 1 ? e.key.toLowerCase() : e.key; held.delete(k); if (mgId && mgPhase === 'play' && mgGame && mgGame.key) mgGame.key(k, false, false); });
   addEventListener('blur', () => held.clear());
+  const joyEl = $('joy'), knob = $('joy-knob');
+  let joyId = null;
+  function joyMove(e) {
+    const r = joyEl.getBoundingClientRect(), R = r.width / 2;
+    let dx = e.clientX - (r.left + R), dy = e.clientY - (r.top + R);
+    const m = Math.hypot(dx, dy), lim = R * 0.62;
+    if (m > lim) { dx *= lim / m; dy *= lim / m; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    joy = m > 10 ? { x: dx / lim, y: dy / lim } : null;
+    if (joy) { player.path = []; tapMarker = null; }
+  }
+  joyEl.addEventListener('pointerdown', e => {
+    e.preventDefault(); initAudio(); joyId = e.pointerId; joyEl.classList.add('active');
+    try { joyEl.setPointerCapture(e.pointerId); } catch (err) {}
+    joyMove(e);
+  });
+  joyEl.addEventListener('pointermove', e => { if (e.pointerId === joyId) joyMove(e); });
+  const joyEnd = e => { if (e.pointerId !== joyId) return; joyId = null; joy = null; joyEl.classList.remove('active'); knob.style.transform = ''; };
+  joyEl.addEventListener('pointerup', joyEnd); joyEl.addEventListener('pointercancel', joyEnd);
+
   let down = null;
   canvas.addEventListener('pointerdown', e => { down = { x: e.clientX, y: e.clientY }; initAudio(); });
   canvas.addEventListener('pointerup', e => {
@@ -307,13 +511,19 @@
       const lx = Math.max(half, Math.min(mapW - half, x)), ly = st.off.y > 0 ? y + CELL * 1.85 : y - CELL * 1.75;
       ctx.strokeText(label, lx, ly); ctx.fillText(label, lx, ly);
     }
-    // player (placeholder avatar until ward-member characters are added)
-    const bob = Math.abs(Math.sin(player.bob)) * CELL * 0.18, r = CELL * 0.55;
-    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(player.x, player.y + r * 0.8, r * 0.8, r * 0.3, 0, 0, 7); ctx.fill();
-    ctx.fillStyle = '#002e5d'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.6;
-    ctx.beginPath(); ctx.arc(player.x, player.y - bob, r, 0, 7); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#fff'; ctx.font = `900 ${CELL * 0.7}px sans-serif`; ctx.fillText('Y', player.x, player.y - bob + CELL * 0.04);
-    ctx.fillStyle = '#f5c842'; ctx.beginPath(); ctx.arc(player.x + player.dir.x * r * 0.9, player.y - bob + player.dir.y * r * 0.9, r * 0.22, 0, 7); ctx.fill();
+    // other members, then you on top
+    const people = npcs.map(n => ({ e: n, m: n.m, me: false }))
+      .concat([...remotes.values()].map(e => ({ e, m: e.m, me: false, s: e.s })))
+      .concat(BOARD ? [] : [{ e: player, m: me, me: true }]).sort((a, b) => a.e.y - b.e.y);
+    for (const p of people) {
+      drawCharacter(p.e.x, p.e.y, p.e.bob, p.e.dir, p.m, p.me);
+      if (p.s && p.s.startsWith('g:') && G[p.s.slice(2)]) {   // "playing a mini-game" bubble
+        const ic = G[p.s.slice(2)].icon, bx = p.e.x + CELL * 1.1, by = p.e.y - CELL * 2.6;
+        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(bx, by, CELL * 0.6, 0, 7); ctx.fill();
+        ctx.font = `${CELL * 0.75}px sans-serif`; ctx.fillStyle = '#000';
+        ctx.fillText(ic.startsWith('<') ? '🎮' : ic, bx, by + CELL * 0.05);
+      }
+    }
     // floating point popups
     for (const f of floaters) {
       ctx.globalAlpha = Math.min(1, f.t); ctx.font = `900 ${CELL * 1.1}px sans-serif`;
@@ -346,7 +556,11 @@
       let ex = pcx + dx * k, ey = pcy + dy * k;
       ex = Math.max(pad, Math.min(vw - pad, ex)); ey = Math.max(top + pad, Math.min(bottom - pad, ey));
       // nudge apart hints that would overlap an earlier one
-      for (const h of edgeHints) if (Math.hypot(h.x - ex, h.y - ey) < 40) { if (ex <= pad + 1 || ex >= vw - pad - 1) ey += ey < h.y ? -40 : 40; else ex += ex < h.x ? -40 : 40; }
+      for (let pass = 0; pass < 6; pass++) {
+        const h = edgeHints.find(h => Math.hypot(h.x - ex, h.y - ey) < 40);
+        if (!h) break;
+        if (ex <= pad + 1 || ex >= vw - pad - 1) ey = h.y + (ey < h.y || h.y > bottom - pad - 40 ? -42 : 42); else ex = h.x + (ex < h.x || h.x > vw - pad - 40 ? -42 : 42);
+      }
       const ang = Math.atan2(dy, dx);
       const r = 17;
       ctx.globalAlpha = 0.92;
@@ -407,6 +621,10 @@
   let last = performance.now();
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    for (const n of npcs) moveNpc(n, dt);
+    moveRemotes(dt);
+    if (me && joinedNet && state === 'play') NET().send({ x: Math.round(player.x / CELL * 100) / 100, y: Math.round(player.y / CELL * 100) / 100,
+      s: mgId ? 'g:' + mgId : (atStation ? atStation.id : '') });
     if (!mgId) { movePlayer(dt); if (state === 'play') checkStation(); updateNear(); }
     else updateMinigame(dt);
     floaters = floaters.filter(f => (f.t -= dt, f.y -= dt * CELL * 1.2, f.t > 0));
@@ -416,8 +634,9 @@
   addEventListener('resize', layout);
   if (window.visualViewport) visualViewport.addEventListener('resize', layout);
   layout(); updateHud();
+  if (BOARD) { $('start').classList.add('hidden'); state = 'board'; $('board-panel').classList.add('show'); renderBoard(); }
   // debug hook for automated tests
   window.CougarCampus = { get state() { return state; }, get player() { return player; }, get points() { return points; },
-    STATIONS, walkTo, openMinigame, get mg() { return { mgId, mgPhase }; } };
+    STATIONS, walkTo, openMinigame, get remotes() { return remotes; }, get npcs() { return npcs; }, get me() { return me; }, get mg() { return { mgId, mgPhase }; } };
   requestAnimationFrame(frame);
 })();

@@ -8,7 +8,7 @@ window.MINIGAMES.sled = {
   blurb: 'Dodge rocks on the way down',
   howTo: 'Drag left/right (or ← →) to steer down Y Mountain.<br>Dodge 🪨 rocks, 🌲 trees and hikers, grab 🎟️ coupons, skim close for bonus. 3 crashes = out!',
   create(api) {
-    const DUR = 40, LIVES = 3, COUPON = 25, NEAR = 15, DIST_PTS = 1.6;
+    const DUR = 24, LIVES = 3, COUPON = 25, NEAR = 15, DIST_PTS = 1.6;
     const PR = 0.32;                      // player radius (in units)
     let t = 0, d = 0, speed = 5, done = false, endT = 0;
     let px = 0.5, vx = 0, targetX = null, keyL = false, keyR = false;

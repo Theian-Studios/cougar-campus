@@ -28,7 +28,7 @@
   #stage { position: relative; width: var(--w); height: var(--h); border-radius: 10px; overflow: hidden;
            box-shadow: 0 10px 40px rgba(0,0,0,.5); background: #efece4; }
   #stage #map { position: absolute; left: 0; top: 0; display: block; pointer-events: none; transform-origin: 0 0; max-width: none; }
-  #stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #stage #hub { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
   #near { position: absolute; left: 10px; bottom: 10px; z-index: 2; pointer-events: none;
           background: rgba(6,26,54,.75); color: #f5c842; font-weight: 600; font-size: .8rem;
           padding: 4px 10px; border-radius: 999px; max-width: 80%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -56,6 +56,39 @@
   .overlay p { color: #c9d6ee; max-width: 470px; line-height: 1.45; }
   .overlay .btn { margin-top: 10px; padding: 12px 28px; font-size: 1.05rem; }
 
+  #who-wrap { width: min(560px, 100%); }
+  #who-search { width: 100%; margin-top: 6px; padding: 10px 14px; border-radius: 999px; border: 2px solid #f5c842; background: #0b2a55;
+                color: #fff; font-size: 16px; outline: none; -webkit-user-select: text; user-select: text; }
+  #who { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; margin-top: 10px;
+         max-height: 42vh; overflow-y: auto; touch-action: pan-y; padding: 2px; -webkit-overflow-scrolling: touch; }
+  .who-card { background: #0b2a55; border: 2px solid rgba(245,200,66,.5); border-radius: 14px; padding: 6px 4px 5px; cursor: pointer;
+              display: flex; flex-direction: column; align-items: center; gap: 3px; color: #fff; font-weight: 700; font-size: .72rem; line-height: 1.15; }
+  .who-card img { width: 64px; height: 64px; border-radius: 50%; border: 2px solid #fff; pointer-events: none; object-fit: cover;
+                  background: radial-gradient(circle at 50% 40%, #2b5aa0, #0b2a55); }
+  .who-card span { pointer-events: none; }
+  .who-card:active, .who-card:hover { border-color: #f5c842; }
+  #board-btn { background: rgba(245,200,66,.18); border: 1px solid #f5c842; border-radius: 999px; font-size: 1rem; padding: 2px 10px; cursor: pointer; }
+  #board-panel { display: none; position: absolute; z-index: 5; right: 10px; top: 10px; bottom: 10px; width: min(340px, calc(100% - 20px));
+                 background: rgba(6,26,54,.94); border: 2px solid #f5c842; border-radius: 14px; flex-direction: column; overflow: hidden; }
+  #board-panel.show { display: flex; }
+  body.mobile #board-panel { top: max(56px, calc(env(safe-area-inset-top) + 50px)); bottom: 160px; }
+  .board-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,.12); color: #f5c842; }
+  .board-head span { flex: 1; font-size: .75rem; color: #9ab0d4; }
+  #board-close { background: none; border: 0; color: #fff; font-size: 1rem; cursor: pointer; }
+  #board-list { overflow-y: auto; padding: 4px 8px 8px; touch-action: pan-y; }
+  .board-row { display: flex; align-items: center; gap: 8px; padding: 5px 4px; border-bottom: 1px solid rgba(255,255,255,.06); font-size: .9rem; }
+  .board-row.me { background: rgba(245,200,66,.15); border-radius: 8px; }
+  .board-row .rank { width: 22px; text-align: right; color: #9ab0d4; font-variant-numeric: tabular-nums; }
+  .board-row img, .board-row .noimg { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; background: #2b5aa0; display: grid; place-items: center; font-weight: 900; }
+  .board-row .bn { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .board-row .dot { width: 8px; height: 8px; border-radius: 50%; background: #3ddc84; }
+  .board-row b { color: #f5c842; font-variant-numeric: tabular-nums; }
+  /* projector view (#board): big leaderboard on the right, whole map on the left */
+  body.board #board-close, body.board #board-btn, body.board #joy { display: none !important; }
+  body.board #board-panel { position: fixed; width: 370px; right: 12px; top: 54px; bottom: 12px; font-size: 1.1rem; }
+  body.board { align-items: flex-start; padding-left: 8px; }
+  body.board header { max-width: none; padding-right: 400px; }
+  body.board header .hud, body.board footer { display: none; }
   #mg { background: #061a36; padding: 0; }
   #mg canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
   #mg .mg-ui { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -75,8 +108,21 @@
   body.mobile .hud b { font-size: 1.35rem; }
   body.mobile footer { display: none; }
   body.mobile #stage { border-radius: 0; box-shadow: none; }
-  body.mobile #sheet { bottom: max(12px, env(safe-area-inset-bottom)); }
-  body.mobile #near { bottom: max(10px, env(safe-area-inset-bottom)); }
+  /* phones: station menu drops in from the top so it never covers the joystick */
+  body.mobile #sheet { top: max(56px, calc(env(safe-area-inset-top) + 50px)); bottom: auto; transform: translate(-50%, -40px);
+                       opacity: 0; visibility: hidden; transition: transform .22s ease, opacity .18s, visibility 0s .22s; }
+  body.mobile #sheet.show { transform: translate(-50%, 0); opacity: 1; visibility: visible; transition: transform .22s ease, opacity .18s; }
+  body.mobile #near { left: auto; right: 10px; bottom: max(14px, env(safe-area-inset-bottom)); max-width: 52%; }
+
+  /* virtual joystick (phones) */
+  #joy { display: none; position: absolute; z-index: 3; left: 22px; bottom: max(22px, calc(env(safe-area-inset-bottom) + 10px));
+         width: 124px; height: 124px; border-radius: 50%; touch-action: none;
+         background: radial-gradient(circle, rgba(6,26,54,.25) 0%, rgba(6,26,54,.45) 70%); border: 2px solid rgba(245,200,66,.7);
+         box-shadow: 0 4px 18px rgba(0,0,0,.35); }
+  body.mobile.playing #joy { display: block; }
+  #joy-knob { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%;
+              background: #f5c842; border: 3px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,.4); pointer-events: none; transition: transform .08s; }
+  #joy.active #joy-knob { transition: none; }
   body.mobile .overlay h2 { font-size: 1.7rem; }
   body.mobile #mg-close { top: auto; bottom: max(14px, env(safe-area-inset-bottom)); right: 14px; }
 </style>
@@ -86,6 +132,7 @@
     <h1>COUGAR CAMPUS <span>74th Ward Games</span></h1>
     <div class="hud">
       <div>POINTS <b id="points">0</b></div>
+      <button id="board-btn" aria-label="Leaderboard">🏆</button>
     </div>
   </header>
 
@@ -93,13 +140,24 @@
     <img id="map" src="map.svg" alt="BYU campus map" />
     <canvas id="hub"></canvas>
     <div id="near"></div>
+    <div id="joy" aria-label="Joystick"><div id="joy-knob"></div></div>
 
     <div id="sheet"><h3 id="sheet-title"></h3><div id="sheet-games"></div></div>
+
+    <div id="board-panel">
+      <div class="board-head"><b>🏆 Leaderboard</b><span id="board-status"></span><button id="board-close" aria-label="Close">✕</button></div>
+      <div id="board-list"></div>
+    </div>
 
     <div id="start" class="overlay">
       <h2>COUGAR CAMPUS</h2>
       <p>Walk around campus and play mini-games at each spot. Every game earns points, and they all add up.</p>
-      <p style="font-size:.85rem">Tap anywhere on the map to walk there · arrow keys / WASD on desktop</p>
+      <p style="font-size:.85rem">Use the joystick or tap the map to walk · arrow keys / WASD on desktop</p>
+      <div id="who-wrap" style="display:none">
+        <p style="color:#f5c842;font-weight:800;margin-top:6px">Who are you?</p>
+        <input id="who-search" type="search" placeholder="Type your name…" autocomplete="off" enterkeyhint="search">
+        <div id="who"></div>
+      </div>
       <button class="btn" id="start-btn">Start</button>
     </div>
 
@@ -116,6 +174,7 @@
   </footer>
 
   <script src="data.js"></script>
+  <script src="members.js"></script>
   <script src="games.js"></script>
   <script src="games/scoop.js"></script>
   <script src="games/fieldgoal.js"></script>
@@ -129,5 +188,6 @@
   <script src="games/bean.js"></script>
   <script src="games/bubble.js"></script>
   <script src="hub.js"></script>
+  <script type="module" src="net.js"></script>
 </body>
 </html>

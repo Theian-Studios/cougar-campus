@@ -11,3 +11,8 @@ Smith Fieldhouse (Free-Throw Frenzy) · Bean Museum (After Dark) · The Wilk (Sc
 
 Campus map and walkway grid come from [Cougar-Man](https://theian-studios.github.io/byu-pacman/).
 Map © OpenStreetMap contributors (ODbL). Plain HTML/JS, no build step — open `index.html`.
+
+## Multiplayer
+Live positions and the leaderboard use Firebase Realtime Database (project `cougar-campus`, anonymous sign-in).
+Projector view: open `index.html#board` on the laptop hooked to the projector.
+Reset scores before an event: Firebase console → Realtime Database → Data → delete `players`.

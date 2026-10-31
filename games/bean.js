@@ -8,9 +8,9 @@ window.MINIGAMES.bean = {
   name: 'Bean Museum After Dark',
   icon: '🦁',
   blurb: 'Remember who moved',
-  howTo: 'Watch which exhibits come to life, then tap them in the same order (or keys 1–4).<br>Each round adds one more. One mistake and they all wake up… 45 s!',
+  howTo: 'Watch which exhibits come to life, then tap them in the same order (or keys 1–4).<br>Each round adds one more. One mistake and they all wake up… 27 s!',
   create(api) {
-    const DUR = 45, TAP_PTS = 10;
+    const DUR = 27, TAP_PTS = 10;
     const bonusFor = n => 25 + 15 * n;
     const ANIMALS = [
       { e: '🦁', name: 'LION',  col: '#f5a623', freq: 220.0, type: 'sawtooth' },

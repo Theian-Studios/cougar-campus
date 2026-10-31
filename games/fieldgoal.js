@@ -8,7 +8,7 @@ window.MINIGAMES.fieldgoal = {
   blurb: 'Swipe kicks through the wind',
   howTo: '<b>Swipe up</b> from the ball: direction aims, length = power (don\'t overdo it!).<br>Watch the 🚩 wind. Every make backs you up 5 yards. 3 misses and you\'re out.',
   create(api) {
-    const DUR = 40, MAX_MISS = 3;
+    const DUR = 24, MAX_MISS = 3;
     const CZ = 6, CH = 2.5;              // camera: yards behind ball, height
     const HW = 3.08, CB = 3.33, UP = 7.5; // goal half-width, crossbar height, upright height above bar (yards)
     const G = 10.7, VMAX = 30, ELEV = 35 * Math.PI / 180;

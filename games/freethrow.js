@@ -8,9 +8,9 @@ window.MINIGAMES.freethrow = {
   name: 'Free-Throw Frenzy',
   icon: '🏀',
   blurb: 'Flick shots, moving hoop',
-  howTo: '<b>Flick up</b> from the ball: direction aims, length = power (match the gold mark).<br>30 seconds. After 3 makes the hoop starts sliding! 3 in a row = ON FIRE 🔥, swishes = bonus.',
+  howTo: '<b>Flick up</b> from the ball: direction aims, length = power (match the gold mark).<br>18 seconds. After 3 makes the hoop starts sliding! 3 in a row = ON FIRE 🔥, swishes = bonus.',
   create(api) {
-    const DUR = 30;
+    const DUR = 18;
     const CZ = 2.2, CH = 2.5;                 // camera: metres behind ball, height
     const RIM_Y = 3.05, R = 0.23, BR = 0.12;  // rim height/radius, ball radius
     const HOOP_Z = 4.22, BOARD_Z = 4.6, BASE_Z = 5.82, FT_Z = 0.15;

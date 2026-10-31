@@ -11,7 +11,7 @@ window.MINIGAMES.qb = {
   blurb: 'Lead receivers with passes',
   howTo: '<b>Swipe</b> toward where the ball should land — longer swipe = longer throw. <b>Lead</b> your receiver!<br>Red defenders near the ball = pick. Hold it too long = sack. 3 strikes and you\'re out.',
   create(api) {
-    const DUR = 40, STRIKES = 3, POCKET = 5.0, QBY = -5, EZ = 32, XMAX = 14, YMAX = 41;
+    const DUR = 24, STRIKES = 3, POCKET = 5.0, QBY = -5, EZ = 32, XMAX = 14, YMAX = 41;
     const CATCH_R = 2.0, PERFECT_R = 0.65, PICK_R = 1.2;
     let t = 0, done = false, endT = 0, score = 0, strikes = 0, streak = 0, bestStreak = 0;
     const tally = { int: 0, sack: 0, inc: 0, catch: 0, perfect: 0 };

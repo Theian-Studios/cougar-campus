@@ -11,7 +11,7 @@ window.MINIGAMES.climb = {
   blurb: 'Tap holds to climb',
   howTo: 'Tap the side (or ← →) with the next hold to climb. Go fast, your chalk 💪 bar keeps draining!<br>Cracked loose rocks make you slip, and so does tapping a blank side. 3 slips = out.',
   create(api) {
-    const DUR = 35, LIVES = 3, PTS_M = 6, MILE = 25, MILE_PTS = 50, FALLBACK = 3;
+    const DUR = 21, LIVES = 3, PTS_M = 6, MILE = 25, MILE_PTS = 50, FALLBACK = 3;
     let t = 0, done = false, endT = 0, endReason = '';
     let h = 0, maxH = 0, pos = 0, lives = LIVES, stamina = 1, miles = 0, grabs = 0, slips = 0;
     let lock = 0, shake = 0, flash = 0, reach = 0, slipAnim = 0, banner = null, combo = 0;

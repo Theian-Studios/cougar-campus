@@ -8,7 +8,7 @@ window.MINIGAMES.bubble = {
   blurb: 'Rapid BYU true/false',
   howTo: 'Testing Center closes soon! Fill <b>T</b> or <b>F</b> for each BYU/Provo statement (tap, or ← → / T F keys).<br>Faster = more points, streaks add bonus, wrong answers cost 25 and a second.',
   create(api) {
-    const DUR = 30, BASE = 40, SPEED_MAX = 40, SPEED_WIN = 5, WRONG = 25, FEED = 0.42, LOCK = 0.9;
+    const DUR = 18, BASE = 40, SPEED_MAX = 40, SPEED_WIN = 5, WRONG = 25, FEED = 0.42, LOCK = 0.9;
     // [statement, isTrue]
     const POOL = [
       ['The BYU Creamery dates back to the 1940s.', true],

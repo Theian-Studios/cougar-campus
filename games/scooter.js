@@ -14,7 +14,7 @@ window.MINIGAMES.scooter = {
     const K = (x, y) => y * GW + x;
     const cx = gx => gx * CELL + CELL / 2, cy = gy => gy * CELL + CELL / 2;
 
-    const DUR = 45, LIVES = 3, POWER_DUR = 5;
+    const DUR = 27, LIVES = 3, POWER_DUR = 5;
     const P_SPEED = 5.6;
 
     function bfs(sx, sy) {
