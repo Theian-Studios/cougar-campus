@@ -18,12 +18,16 @@
   if (BOARD) document.body.classList.add('board');
   const typing = () => { const a = document.activeElement; return !!(a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')); };
   document.addEventListener('focusin', () => document.body.classList.toggle('typing', typing()));
-  document.addEventListener('focusout', () => setTimeout(() => { document.body.classList.toggle('typing', typing()); if (!typing()) { window.scrollTo(0, 0); layout(); } }, 50));
+  document.addEventListener('focusout', () => {
+    // iOS slides the keyboard away over ~0.3 s: re-measure a few times so the page ends up full-height
+    for (const ms of [60, 350, 800]) setTimeout(() => { document.body.classList.toggle('typing', typing()); if (!typing()) { window.scrollTo(0, 0); layout(); } }, ms);
+  });
   function layout() {
     if (typing() && stage.style.getPropertyValue('--w')) return;   // the on-screen keyboard shouldn't squash the page
     mobile = !BOARD && (Math.min(innerWidth, innerHeight) < 700 || matchMedia('(pointer: coarse)').matches);
     document.body.classList.toggle('mobile', mobile);
-    const vh = (window.visualViewport && visualViewport.height) || innerHeight;
+    // phones: the layout viewport (innerHeight) ignores the on-screen keyboard; visualViewport shrinks with it
+    const vh = mobile ? innerHeight : ((window.visualViewport && visualViewport.height) || innerHeight);
     let stageW, stageH;
     if (mobile) {
       stageW = innerWidth; stageH = vh;
@@ -533,8 +537,21 @@
     $('start-btn').style.display = 'none';
     $('who-wrap').style.display = '';
   }
+  // "How to play" card: shown once per phone before the first walk, and any time from the ❔ button
+  let howtoDone = false;
+  function showHowTo(then) {
+    const h = $('howto');
+    $('howto-move').innerHTML = mobile
+      ? '<b>Walk</b> with the joystick in the bottom-left corner, <b>or just tap</b> a game icon (or anywhere on the map) and you’ll walk there.'
+      : '<b>Walk</b> with the arrow keys / WASD, <b>or just click</b> a game icon (or anywhere on the map) and you’ll walk there.';
+    h.classList.add('show');
+    $('howto-go').onclick = () => { h.classList.remove('show'); try { localStorage.setItem('cc-howto', '1'); } catch (e) {} if (then) then(); };
+  }
+  $('help-btn').onclick = () => showHowTo(null);
   function startSession() {
     initAudio();
+    let seen = howtoDone; try { seen = seen || localStorage.getItem('cc-howto') === '1'; } catch (e) {}
+    if (!seen && !BOARD && state !== 'play') { howtoDone = true; $('start').classList.add('hidden'); showHowTo(() => startSession()); return; }
     state = 'play';
     $('start').classList.add('hidden');
     document.body.classList.add('playing');

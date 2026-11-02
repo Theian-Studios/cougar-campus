@@ -68,15 +68,16 @@
   .who-card span { pointer-events: none; }
   .who-card.add { border-style: dashed; justify-content: center; min-height: 104px; }
   .who-card.add .plus { width: 64px; height: 64px; border-radius: 50%; border: 2px dashed #f5c842; color: #f5c842; display: grid; place-items: center; font-size: 2rem; font-weight: 900; }
-  #look-picker { display: none; position: absolute; inset: 0; z-index: 6; background: rgba(6,26,54,.94); align-items: flex-start; justify-content: center; padding: 70px 16px 16px; }
+  #look-picker { display: none; position: absolute; inset: 0; z-index: 6; background: #061a36; align-items: flex-start; justify-content: center;
+                 padding: 70px 16px 24px; overflow-y: auto; touch-action: pan-y; }
   #look-picker.show { display: flex; }
   .look-card { width: min(420px, 100%); text-align: center; display: flex; flex-direction: column; gap: 10px; }
   .look-card h3 { color: #f5c842; font-size: 1.4rem; }
   #look-name { width: 100%; padding: 10px 14px; border-radius: 999px; border: 2px solid #f5c842; background: #0b2a55; color: #fff; font-size: 16px; outline: none; -webkit-user-select: text; user-select: text; }
   #look-name.need { border-color: #ff6b5e; animation: shake .3s; }
   @keyframes shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
-  #look-list { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-  .look { aspect-ratio: 1; border-radius: 50%; border: 3px solid #fff; font-size: 2.2rem; cursor: pointer; display: grid; place-items: center; }
+  #look-list { display: grid; grid-template-columns: repeat(4, 64px); gap: 12px; justify-content: center; }
+  .look { width: 64px; height: 64px; border-radius: 50%; border: 3px solid #fff; font-size: 2rem; cursor: pointer; display: grid; place-items: center; padding: 0; }
   .look:active { transform: scale(.94); border-color: #f5c842; }
   /* while the keyboard is up: hide the intro text, pin the search to the top, results right under it */
   body.typing #start, body.searching #start { justify-content: flex-start; padding-top: 64px; }
@@ -112,6 +113,21 @@
   body.mobile.sheet-open #net-badge { display: none; }
   #net-badge.tap { pointer-events: auto; cursor: pointer; }
   body.mobile #net-badge { top: max(48px, calc(env(safe-area-inset-top) + 42px)); }
+  #help-btn { background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.5); border-radius: 999px; font-size: .9rem; padding: 2px 8px; cursor: pointer; }
+  body.board #help-btn { display: none; }
+  #howto { display: none; position: absolute; inset: 0; z-index: 7; background: rgba(6,26,54,.93); align-items: center; justify-content: center; padding: 64px 16px 20px; overflow-y: auto; }
+  #howto.show { display: flex; }
+  .howto-card { width: min(440px, 100%); display: flex; flex-direction: column; gap: 14px; }
+  .howto-card h2 { color: #f5c842; font-size: 1.8rem; font-weight: 900; text-align: center; }
+  .howto-row { display: flex; align-items: center; gap: 14px; background: #0b2a55; border: 1px solid rgba(245,200,66,.35); border-radius: 14px; padding: 12px; }
+  .howto-row p { color: #e5ecf8; line-height: 1.35; font-size: .95rem; }
+  .howto-row b { color: #f5c842; }
+  .hi { flex: none; width: 54px; height: 54px; border-radius: 50%; background: #fff; display: grid; place-items: center; font-size: 1.7rem; border: 3px solid #f5c842; }
+  .hi.arrow { background: #0b2a55; color: #f5c842; }
+  .hi.joy { background: radial-gradient(circle, rgba(6,26,54,.25), rgba(6,26,54,.6)); position: relative; }
+  .hi.joy i { width: 24px; height: 24px; border-radius: 50%; background: #f5c842; border: 2px solid #fff; animation: nudge 1.6s ease-in-out infinite; }
+  @keyframes nudge { 0%, 100% { transform: translate(0, 0); } 25% { transform: translate(9px, -6px); } 60% { transform: translate(-8px, 7px); } }
+  #howto-go { align-self: center; margin-top: 4px; padding: 12px 34px; font-size: 1.1rem; }
   #mg { background: #061a36; padding: 0; }
   #mg canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
   #mg .mg-ui { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -156,6 +172,7 @@
     <h1>COUGAR CAMPUS <span>74th Ward Games</span></h1>
     <div class="hud">
       <div>POINTS <b id="points">0</b></div>
+      <button id="help-btn" aria-label="How to play">❔</button>
       <button id="board-btn" aria-label="Leaderboard">🏆</button>
     </div>
   </header>
@@ -194,6 +211,17 @@
         </div>
       </div>
       <button class="btn" id="start-btn">Start</button>
+    </div>
+
+    <div id="howto">
+      <div class="howto-card">
+        <h2>How to play</h2>
+        <div class="howto-row"><span class="hi joy"><i></i></span><p id="howto-move"></p></div>
+        <div class="howto-row"><span class="hi">🍦</span><p>Each <b>gold circle</b> is a game spot. When you get close, its games pop up. Tap <b>Play</b>.</p></div>
+        <div class="howto-row"><span class="hi arrow">➤</span><p>Icons on the <b>edge of the screen</b> point to games that are off-screen. Tap one to head there.</p></div>
+        <div class="howto-row"><span class="hi">🏆</span><p>Every game earns <b>points</b>. Tap the trophy to see the live leaderboard.</p></div>
+        <button class="btn" id="howto-go">Let’s go!</button>
+      </div>
     </div>
 
     <div id="mg" class="overlay hidden">
