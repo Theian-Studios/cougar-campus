@@ -8,7 +8,7 @@ window.MINIGAMES.sled = {
   blurb: 'Dodge rocks on the way down',
   howTo: 'Drag left/right (or ← →) to steer down Y Mountain.<br>Dodge 🪨 rocks, 🌲 trees and hikers, grab 🎟️ coupons, skim close for bonus. 3 crashes = out!',
   create(api) {
-    const DUR = 24, LIVES = 3, COUPON = 25, NEAR = 15, DIST_PTS = 1.6;
+    const DUR = 24, LIVES = 3, COUPON = 25, NEAR = 15, DIST_PTS = 1.85;   // slower sled → a bit more per metre so scores stay comparable
     const PR = 0.32;                      // player radius (in units)
     let t = 0, d = 0, speed = 5, done = false, endT = 0;
     let px = 0.5, vx = 0, targetX = null, keyL = false, keyR = false;
@@ -23,7 +23,7 @@ window.MINIGAMES.sled = {
     const rnd = (a, b) => a + Math.random() * (b - a);
     function spawnRow() {
       const prog = Math.min(1, t / DUR);
-      const gap = 2.4 - 1.0 * prog;
+      const gap = 2.8 - 0.9 * prog;                            // more room between rows
       const y = nextRow; nextRow += gap * rnd(0.8, 1.2);
       const n = Math.random() < 0.35 + prog * 0.45 ? 2 : 1;
       const used = [];
@@ -50,7 +50,7 @@ window.MINIGAMES.sled = {
       api.finish(s, `${reason} · ${Math.round(d * 2)} m · 🎟️×${coupons} · ${nears} close call${nears === 1 ? "" : "s"}`);
     }
     function crash(o) {
-      lives--; tumble = 0.9; inv = 2.4; shake = 1; flash = 1; speed *= 0.45;
+      lives--; tumble = 0.8; inv = 3.0; shake = 1; flash = 1; speed *= 0.45;
       api.sfx('hit');
       for (let i = 0; i < 14; i++) puffs.push({ x: px, y: d, vx: rnd(-2, 2), vy: rnd(-1, 3), t: rnd(0.4, 0.8) });
       pop(o.kind === 'hiker' ? 'Sorry!! 🙏' : 'OOF!', px, d, '#ff5a4e');
@@ -71,7 +71,7 @@ window.MINIGAMES.sled = {
         t += dt;
         tumble = Math.max(0, tumble - dt); inv = Math.max(0, inv - dt);
         // speed ramps 5 → ~14 units/s; recovers after a crash
-        const want = 5 + 5.5 * Math.min(1, t / DUR);
+        const want = 4.6 + 4.2 * Math.min(1, t / DUR);           // gentler top speed
         speed += (want - speed) * Math.min(1, dt * (tumble > 0 ? 0.3 : 1.2));
         d += speed * dt;
         // steering
@@ -93,12 +93,12 @@ window.MINIGAMES.sled = {
           if (o.gone) continue;
           const dx = o.x * PW / U - pxU, dy = o.y - d, dist = Math.hypot(dx, dy);
           if (o.kind === 'coupon') {
-            if (dist < PR + o.r + 0.1 && tumble <= 0) {
+            if (dist < PR + o.r + 0.25 && tumble <= 0) {             // coupons are easier to grab
               o.gone = true; coupons++; api.sfx('coin'); pop(`+${COUPON} 🍦`, o.x, o.y, '#f5c842');
             }
             continue;
           }
-          if (!o.hitDone && dist < PR + o.r - 0.06) {
+          if (!o.hitDone && dist < PR + o.r - 0.16) {               // forgiving hit-box: grazes don't count
             o.hitDone = true;
             if (inv <= 0) { crash(o); if (lives <= 0) return; }
             continue;

@@ -14,7 +14,7 @@ window.MINIGAMES.freethrow = {
     const CZ = 2.2, CH = 2.5;                 // camera: metres behind ball, height
     const RIM_Y = 3.05, R = 0.23, BR = 0.12;  // rim height/radius, ball radius
     const HOOP_Z = 4.22, BOARD_Z = 4.6, BASE_Z = 5.82, FT_Z = 0.15;
-    const BOARD_HW = 0.9, BOARD_B = 2.9, BOARD_T = 3.95;
+    const BOARD_HW = 0.9, BOARD_B = 2.9, BOARD_T = 4.75;
     const G = 9.8, ELEV = 62 * Math.PI / 180;
     const START = [0, 1.2, 0];
     const P_IDEAL = 0.72, COOLDOWN = 0.6;
@@ -119,8 +119,9 @@ window.MINIGAMES.freethrow = {
       b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt; b.t += dt;
       b.spin -= dt * 9;
       // backboard (front face)
-      if (b.vz > 0 && b.z + BR > BOARD_Z && pz + BR <= BOARD_Z + 0.08 && Math.abs(b.x - hx) < BOARD_HW + BR * 0.5 && b.y > BOARD_B - BR && b.y < BOARD_T + BR) {
-        b.z = BOARD_Z - BR; b.vz = -Math.abs(b.vz) * 0.55; b.vx = b.vx * 0.8 + hoopVel * 0.3; b.vy *= 0.85;
+      if (b.vz > 0 && b.z + BR > BOARD_Z && pz + BR <= BOARD_Z + 0.08 && Math.abs(b.x - hx) < BOARD_HW + BR * 0.5 && b.y > BOARD_B - BR) {
+        // off the glass: bounces back toward the hoop (high hits drop down onto the rim — a real chance at a bank shot)
+        b.z = BOARD_Z - BR; b.vz = -Math.abs(b.vz) * 0.42; b.vx = b.vx * 0.8 + hoopVel * 0.3; b.vy = Math.min(b.vy * 0.7, 1.5);
         if (!b.board && !b.res) api.sfx('thud');
         b.board = true; shake = Math.max(shake, 0.35);
       }

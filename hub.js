@@ -16,7 +16,11 @@
   const cam = { x: NaN, y: NaN };
   const BOARD = location.hash === '#board';   // projector view: whole map + live leaderboard, no player
   if (BOARD) document.body.classList.add('board');
+  const typing = () => { const a = document.activeElement; return !!(a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')); };
+  document.addEventListener('focusin', () => document.body.classList.toggle('typing', typing()));
+  document.addEventListener('focusout', () => setTimeout(() => { document.body.classList.toggle('typing', typing()); if (!typing()) { window.scrollTo(0, 0); layout(); } }, 50));
   function layout() {
+    if (typing() && stage.style.getPropertyValue('--w')) return;   // the on-screen keyboard shouldn't squash the page
     mobile = !BOARD && (Math.min(innerWidth, innerHeight) < 700 || matchMedia('(pointer: coarse)').matches);
     document.body.classList.toggle('mobile', mobile);
     const vh = (window.visualViewport && visualViewport.height) || innerHeight;
@@ -96,7 +100,21 @@
     const count = {}; for (const m of MEMBERS) count[m.first] = (count[m.first] || 0) + 1;
     for (const m of MEMBERS) if (count[m.first] > 1) { const parts = m.name.split(' '); m.first += ' ' + parts[parts.length - 1][0] + '.'; }
   }
-  const photoOf = m => { if (!m.img) { m.img = new Image(); m.img.src = m.photo; } return m.img; }; // load photos only when needed
+  // custom characters for anyone not on the ward list: an animal mascot + shirt color, plus their own name.
+  // Encoded in the member id ("guest:<look>:<name>") so every other phone can draw them too.
+  const LOOKS = [
+    { e: '🐻', c: '#8b5a2b' }, { e: '🦊', c: '#e8742a' }, { e: '🐯', c: '#e0a030' }, { e: '🐸', c: '#3fa34d' },
+    { e: '🐼', c: '#4a4f57' }, { e: '🐨', c: '#7d8a96' }, { e: '🐵', c: '#9a6b4f' }, { e: '🐱', c: '#3d6fb6' },
+  ];
+  function customMember(name, look) {
+    name = name.replace(/\s+/g, ' ').trim().slice(0, 30) || 'Guest';
+    return { id: `guest:${look}:${name}`.slice(0, 60), name, first: name.split(' ')[0], custom: true, look: LOOKS[look] || LOOKS[0], photo: '' };
+  }
+  function parseGuest(id, fallbackName) {
+    const m = /^guest:(\d+):(.*)$/.exec(id || ''); if (!m) return null;
+    return customMember(m[2] || fallbackName || 'Guest', +m[1]);
+  }
+  const photoOf = m => { if (m.custom || !m.photo) return null; if (!m.img) { m.img = new Image(); m.img.src = m.photo; } return m.img; }; // load photos only when needed
   let me = null;          // the member you picked
   let npcs = [];          // other members walking around (stand-ins for other live players)
   function drawCharacter(x, y, bobT, dir, m, isMe) {
@@ -116,6 +134,14 @@
       ctx.drawImage(img, left, top, Wd, H);
       ctx.restore();
       topY = top + H * 0.02;
+    } else if (m && m.custom) {
+      // custom character: shirt in their color, big animal-mascot head
+      const R = CELL * 0.82, hy = y - bob - CELL * 1.05;
+      ctx.fillStyle = m.look.c; ctx.strokeStyle = isMe ? '#f5c842' : '#fff'; ctx.lineWidth = isMe ? 2 : 1.4;
+      ctx.beginPath(); ctx.roundRect(x - R * 0.8, y - bob - CELL * 0.35, R * 1.6, CELL * 0.95, R * 0.45); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(x, hy, R, 0, 7); ctx.fill(); ctx.stroke();
+      ctx.font = `${R * 1.45}px sans-serif`; ctx.fillStyle = '#000'; ctx.fillText(m.look.e, x, hy + R * 0.08);
+      topY = hy - R;
     } else {
       // placeholder avatar (no photo)
       const R = CELL * 0.6, hy = y - bob - R * 0.3;
@@ -222,10 +248,19 @@
     player.bob = moving ? player.bob + dt * 14 : 0;
     if (tapMarker && !player.path.length && !moving) tapMarker = null;
   }
+  // the game menu pops up as soon as you're near a station (its walkway spot OR its icon), even while walking;
+  // it stays open until you've moved a bit further away, so it doesn't flicker at the edge
+  const OPEN_R = CELL * 3.2, CLOSE_R = CELL * 4.2;
+  function stationDist(st) {
+    const m = markerPos(st);
+    return Math.min(Math.hypot(player.x - cx(st.at.x), player.y - cy(st.at.y)), Math.hypot(player.x - m.x, player.y - m.y));
+  }
   function checkStation() {
-    const here = player.t >= 1 ? player.to : null;
-    const st = here ? STATIONS.find(s => Math.abs(s.at.x - here.x) + Math.abs(s.at.y - here.y) <= 1) : null;
-    if (st !== atStation) { atStation = st; showSheet(st); }
+    let st = null, bd = Infinity;
+    for (const s of STATIONS) { const d = stationDist(s); if (d < bd) { bd = d; st = s; } }
+    if (atStation && stationDist(atStation) < CLOSE_R && (st === atStation || bd >= OPEN_R)) return;   // keep current
+    const next = bd < OPEN_R ? st : null;
+    if (next !== atStation) { atStation = next; showSheet(next); }
   }
 
   // ---------- station sheet ----------
@@ -340,7 +375,7 @@
   // points are also saved on the phone, so a reload while the network is down doesn't lose them
   const savePoints = () => { try { if (me) localStorage.setItem('cc-points-' + me.id, String(points)); } catch (e) {} };
   const loadPoints = m => { try { return +localStorage.getItem('cc-points-' + m.id) || 0; } catch (e) { return 0; } };
-  const memberById = id => MEMBERS.find(m => m.id === id);
+  const memberById = (id, name) => MEMBERS.find(m => m.id === id) || parseGuest(id, name);
   const remotes = new Map();   // uid -> { m, x, y, tx, ty, bob, dir, s }
   function syncRemotes() {
     if (!liveNow()) { remotes.clear(); return; }     // paused: don't show people frozen in place
@@ -352,7 +387,7 @@
       const tx = r.x * CELL, ty = r.y * CELL;
       let e = remotes.get(uid);
       if (!e) { e = { x: tx, y: ty, bob: 0, dir: {x: 0, y: 1} }; remotes.set(uid, e); }
-      e.m = memberById(r.m) || { id: r.m, name: r.n || '?', first: (r.n || '?').split(' ')[0], photo: '' };
+      e.m = memberById(r.m, r.n) || { id: r.m, name: r.n || '?', first: (r.n || '?').split(' ')[0], photo: '' };
       e.tx = tx; e.ty = ty; e.s = r.s || '';
     }
     for (const uid of [...remotes.keys()]) if (!seen.has(uid)) remotes.delete(uid);
@@ -431,8 +466,10 @@
     }
     box.innerHTML = '';
     rows.slice(0, 100).forEach((r, i) => {
-      const m = memberById(r.m), li = document.createElement('div'); li.className = 'board-row' + (me && r.m === me.id ? ' me' : '');
-      li.innerHTML = `<span class="rank">${i + 1}</span>${m ? `<img src="${m.photo}" alt="">` : '<span class="noimg">Y</span>'}<span class="bn">${(m ? m.name : r.n) || '?'}</span>${r.on ? '<span class="dot" title="playing"></span>' : ''}<b>${(r.p || 0).toLocaleString()}</b>`;
+      const m = memberById(r.m, r.n), li = document.createElement('div'); li.className = 'board-row' + (me && r.m === me.id ? ' me' : '');
+      const av = m && m.custom ? `<span class="noimg" style="background:${m.look.c}">${m.look.e}</span>` : m ? `<img src="${m.photo}" alt="">` : '<span class="noimg">Y</span>';
+      li.innerHTML = `<span class="rank">${i + 1}</span>${av}<span class="bn"></span>${r.on ? '<span class="dot" title="playing"></span>' : ''}<b>${(r.p || 0).toLocaleString()}</b>`;
+      li.querySelector('.bn').textContent = (m ? m.name : r.n) || '?';   // names typed by players go in as text, never HTML${r.on ? '<span class="dot" title="playing"></span>' : ''}<b>${(r.p || 0).toLocaleString()}</b>`;
       box.appendChild(li);
     });
   }
@@ -460,10 +497,39 @@
       b.onclick = () => pickMember(m);
       box.appendChild(b); cards.push([m.name.toLowerCase(), b]);
     }
+    // "Not on the list?" card: always last; becomes "Play as <typed name>" while typing
+    const add = document.createElement('button'); add.className = 'who-card add';
+    add.innerHTML = '<span class="plus">＋</span><span class="lbl">Not on the list?</span>';
+    box.appendChild(add);
+    const lookBox = $('look-picker');
+    function openLooks() {
+      const typed = $('who-search').value.trim();
+      $('look-name').value = typed && !MEMBERS.some(m => m.name.toLowerCase() === typed.toLowerCase()) ? typed : '';
+      lookBox.classList.add('show'); setTimeout(() => $('look-name').focus(), 50);
+    }
+    add.onclick = openLooks;
+    $('look-cancel').onclick = () => lookBox.classList.remove('show');
+    const looks = $('look-list');
+    LOOKS.forEach((L, i) => {
+      const b = document.createElement('button'); b.className = 'look'; b.style.background = L.c; b.textContent = L.e;
+      b.onclick = () => {
+        const name = $('look-name').value.trim();
+        if (!name) { $('look-name').focus(); $('look-name').classList.add('need'); return; }
+        $('look-name').blur(); lookBox.classList.remove('show');
+        pickMember(customMember(name, i));
+      };
+      looks.appendChild(b);
+    });
+    $('look-name').addEventListener('input', () => $('look-name').classList.remove('need'));
     $('who-search').addEventListener('input', e => {
       const q = e.target.value.trim().toLowerCase();
-      for (const [n, b] of cards) b.style.display = !q || n.split(' ').some(w => w.startsWith(q)) || n.startsWith(q) ? '' : 'none';
+      let shown = 0;
+      for (const [n, b] of cards) { const ok = !q || n.split(' ').some(w => w.startsWith(q)) || n.startsWith(q); b.style.display = ok ? '' : 'none'; if (ok) shown++; }
+      add.querySelector('.lbl').textContent = q ? `Play as “${e.target.value.trim().slice(0, 30)}”` : 'Not on the list?';
+      $('who-empty').style.display = q && !shown ? '' : 'none';
+      document.body.classList.toggle('searching', !!q);   // stay compact while there's a search, so nothing jumps under your finger
     });
+    $('who-search').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } });
     $('start-btn').style.display = 'none';
     $('who-wrap').style.display = '';
   }
@@ -479,6 +545,7 @@
 
   // ---------- input ----------
   addEventListener('keydown', e => {
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;   // typing a name, not walking
     const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     if (mgId) {
       if (mgPhase === 'play' && mgGame) {
@@ -492,7 +559,7 @@
       const g = atStation.games.find(id => !G[id].comingSoon); if (g) { e.preventDefault(); openMinigame(g); }
     }
   });
-  addEventListener('keyup', e => { const k = e.key.length === 1 ? e.key.toLowerCase() : e.key; held.delete(k); if (mgId && mgPhase === 'play' && mgGame && mgGame.key) mgGame.key(k, false, false); });
+  addEventListener('keyup', e => { if (e.target && e.target.tagName === 'INPUT') return; const k = e.key.length === 1 ? e.key.toLowerCase() : e.key; held.delete(k); if (mgId && mgPhase === 'play' && mgGame && mgGame.key) mgGame.key(k, false, false); });
   addEventListener('blur', () => held.clear());
   const joyEl = $('joy'), knob = $('joy-knob');
   let joyId = null;
