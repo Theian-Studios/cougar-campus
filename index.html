@@ -89,14 +89,22 @@
   body.board { align-items: flex-start; padding-left: 8px; }
   body.board header { max-width: none; padding-right: 400px; }
   body.board header .hud, body.board footer { display: none; }
+  #net-badge { display: none; position: absolute; z-index: 3; left: 50%; top: 10px; transform: translateX(-50%); max-width: calc(100% - 24px);
+               background: rgba(6,26,54,.88); color: #f5c842; border: 1px solid rgba(245,200,66,.6); border-radius: 999px;
+               padding: 6px 12px; font-size: .78rem; font-weight: 700; text-align: center; pointer-events: none; }
+  #net-badge.show { display: block; }
+  body.mobile.sheet-open #net-badge { display: none; }
+  #net-badge.tap { pointer-events: auto; cursor: pointer; }
+  body.mobile #net-badge { top: max(48px, calc(env(safe-area-inset-top) + 42px)); }
   #mg { background: #061a36; padding: 0; }
   #mg canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
   #mg .mg-ui { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
                gap: 10px; padding: 24px; text-align: center; background: rgba(6,26,54,.88); }
   #mg .mg-ui.hidden { display: none; }
   #mg .mg-ui .big { font-size: 3.2rem; font-weight: 900; color: #f5c842; }
-  #mg-close { position: absolute; top: 10px; right: 12px; z-index: 2; background: rgba(255,255,255,.15); color: #fff;
-              border: 0; border-radius: 999px; width: 34px; height: 34px; font-size: 1.1rem; cursor: pointer; }
+  #mg-close { position: absolute; top: 10px; right: 12px; z-index: 2; background: rgba(6,26,54,.7); color: #fff;
+              border: 1px solid rgba(255,255,255,.5); border-radius: 999px; min-width: 34px; height: 34px; padding: 0 8px; font-size: 1rem; font-weight: 800; cursor: pointer; }
+  #mg-close.armed { background: #ff3b30; border-color: #fff; }
 
   footer { width: 100%; max-width: 1100px; display: flex; justify-content: space-between; padding: 8px 16px; font-size: .8rem; color: #7f93b8; gap: 12px; }
 
@@ -140,6 +148,7 @@
     <img id="map" src="map.svg" alt="BYU campus map" />
     <canvas id="hub"></canvas>
     <div id="near"></div>
+    <div id="net-badge" role="status"></div>
     <div id="joy" aria-label="Joystick"><div id="joy-knob"></div></div>
 
     <div id="sheet"><h3 id="sheet-title"></h3><div id="sheet-games"></div></div>

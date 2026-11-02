@@ -13,7 +13,7 @@ window.MINIGAMES.bubble = {
     const POOL = [
       ['The BYU Creamery dates back to the 1940s.', true],
       ['A Cougar Tail is a giant maple bar sold at BYU games.', true],
-      ['The Y on Y Mountain is longer than a football field.', true],
+      ['The Y on Y Mountain is over 300 feet long.', true],
       ['The Y on Y Mountain was first built in 1906.', true],
       ['LaVell Edwards Stadium is named after a legendary BYU football coach.', true],
       ['BYU won the college football national championship in 1984.', true],
@@ -276,7 +276,7 @@ window.MINIGAMES.bubble = {
         const textBot = textTop + (lines.length - 0.5) * lh;
 
         // bubbles
-        const bw = Math.min(pw * 0.33, 190), bh = Math.min(bw * 0.62, ph * 0.22);
+        const bw = Math.min(pw * 0.33, 190), bh = Math.max(14, Math.min(bw * 0.62, ph * 0.22));
         const areaTop = textBot + 10;
         const by = Math.max(areaTop + bh * 0.8, Math.min(pbot - bh * 0.9, areaTop + (pbot - areaTop) * 0.5));
         const mid = px + 28 + (pw - 28) / 2, gap = Math.min(pw * 0.27, 150);

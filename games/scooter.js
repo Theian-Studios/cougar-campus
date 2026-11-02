@@ -255,8 +255,9 @@ window.MINIGAMES.scooter = {
     }
     function updateCam(dt) {
       if (!mobile) { cam.x = 0; cam.y = 0; return; }
-      const clamp = (v, span, total) => span >= total ? (total - span) / 2 : Math.max(0, Math.min(total - span, v));
-      const gx = clamp(player.x - viewW / 2, viewW, mapW), gy = clamp(player.y - viewH / 2, viewH, mapH);
+      const clamp = (v, span, total, lo = 0, hi = 0) => span >= total + lo + hi ? (total - span) / 2 : Math.max(-lo, Math.min(total - span + hi, v));
+      // let the camera scroll past the map's top/bottom edge so the player is never stuck under the HUD or the ✕
+      const gx = clamp(player.x - viewW / 2, viewW, mapW), gy = clamp(player.y - viewH / 2, viewH, mapH, 112 / sc, 64 / sc);
       if (isNaN(cam.x)) { cam.x = gx; cam.y = gy; }
       else { const k = Math.min(1, dt * 7); cam.x += (gx - cam.x) * k; cam.y += (gy - cam.y) * k; }
       offX = -cam.x * sc; offY = -cam.y * sc;
@@ -439,10 +440,7 @@ window.MINIGAMES.scooter = {
       },
       release() { touch = null; },
       key(k, isDown) { if (isDown && KEYS[k]) setWant(KEYS[k]); },
-      // test hook
-      _dbg: { get player() { return player; }, get hazards() { return hazards; }, get score() { return score; }, get lives() { return lives; }, get power() { return power; }, get bumps() { return bumps; }, setWant, dots, cells, get t() { return t; }, set t(v) { t = v; } },
     };
-    window.__scooterDbg = game._dbg; // test hook
     return game;
   },
 };

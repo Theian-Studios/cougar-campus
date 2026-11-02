@@ -37,7 +37,7 @@ window.MINIGAMES.climb = {
     function end(reason) { if (endT > 0 || done) return; endReason = reason; endT = 0.9; lock = 9; }
     function finish() {
       if (done) return; done = true;
-      api.finish(score(), `${endReason} · ${maxH} m high · ${grabs} grabs · ${slips} slip${slips === 1 ? '' : 's'}`);
+      api.finish(score(), `${endReason} · ${maxH} m high · ${grabs} grab${grabs === 1 ? "" : "s"} · ${slips} slip${slips === 1 ? '' : 's'}`);
     }
     function holdX(side) { return W / 2 + side * R; }
     function holdY(i) { return BY - (i - pos) * S; }
@@ -96,7 +96,6 @@ window.MINIGAMES.climb = {
         if (stamina <= 0) { stamina = 0; api.sfx('thud'); end('Pumped out!'); return; }
         if (t >= DUR) { t = DUR; end("Time's up!"); }
       },
-      get _dbg() { return { next: steps[h + 1], h, maxH, stamina, lives, t }; }, // test hook
       tap(x) { grab(x < W / 2 ? -1 : 1); },
       key(k, isDown, isRepeat) {
         if (!isDown || isRepeat) return;

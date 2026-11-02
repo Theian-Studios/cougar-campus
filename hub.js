@@ -92,6 +92,10 @@
 
   // ---------- ward-member characters (optional members.js) ----------
   const MEMBERS = (window.MEMBERS || []).map(m => ({ ...m, first: m.name.split(' ')[0], img: null }));
+  { // two Elis, two Avas…: show "Eli E." / "Eli H." on name tags so people can tell them apart
+    const count = {}; for (const m of MEMBERS) count[m.first] = (count[m.first] || 0) + 1;
+    for (const m of MEMBERS) if (count[m.first] > 1) { const parts = m.name.split(' '); m.first += ' ' + parts[parts.length - 1][0] + '.'; }
+  }
   const photoOf = m => { if (!m.img) { m.img = new Image(); m.img.src = m.photo; } return m.img; }; // load photos only when needed
   let me = null;          // the member you picked
   let npcs = [];          // other members walking around (stand-ins for other live players)
@@ -227,7 +231,7 @@
   // ---------- station sheet ----------
   function showSheet(st) {
     const sheet = $('sheet');
-    if (!st || state !== 'play') { sheet.classList.remove('show'); return; }
+    if (!st || state !== 'play') { sheet.classList.remove('show'); document.body.classList.remove('sheet-open'); return; }
     $('sheet-title').textContent = `${st.icon} ${st.name}`;
     const box = $('sheet-games'); box.innerHTML = '';
     for (const id of st.games) {
@@ -238,7 +242,7 @@
       btn.onclick = () => openMinigame(id);
       row.appendChild(btn); box.appendChild(row);
     }
-    sheet.classList.add('show');
+    sheet.classList.add('show'); document.body.classList.add('sheet-open');
   }
 
   // ---------- mini-game host ----------
@@ -271,6 +275,7 @@
     mgPhase = 'result';
     const earned = Math.max(0, Math.round(raw));
     points += earned; plays++;
+    savePoints();
     if (NET()) NET().send({ p: points });
     best[mgId] = Math.max(best[mgId] || 0, raw);
     floaters.push({ text: `+${earned}`, x: player.x, y: player.y - CELL, t: 1.6 });
@@ -285,8 +290,17 @@
     $('mg-again').onclick = () => openMinigame(mgId);
     $('mg-back').onclick = closeMinigame;
   }
-  $('mg-close').onclick = () => { if (mgPhase === 'play' && !confirmQuit()) return; closeMinigame(); };
-  function confirmQuit() { return true; } // quitting mid-round just forfeits that round
+  // ✕ mid-round needs a second tap (an accidental brush of the corner shouldn't throw away a round)
+  let quitArmed = 0;
+  $('mg-close').onclick = () => {
+    if (mgPhase === 'play' && performance.now() - quitArmed > 2000) {
+      quitArmed = performance.now(); const b = $('mg-close'); b.classList.add('armed'); b.textContent = 'Quit?';
+      setTimeout(() => { b.classList.remove('armed'); b.textContent = '✕'; }, 2000);
+      return;
+    }
+    quitArmed = 0; $('mg-close').classList.remove('armed'); $('mg-close').textContent = '✕';
+    closeMinigame();
+  };
   function updateMinigame(dt) {
     if (mgPhase === 'count') {
       const before = Math.ceil(mgCount); mgCount -= dt;
@@ -314,16 +328,22 @@
     mgGame.tap(e.clientX - r.left, e.clientY - r.top);
   });
   mgCanvas.addEventListener('pointermove', e => { if (mgPhase === 'play' && mgGame && mgGame.move) { const r = mgCanvas.getBoundingClientRect(); mgGame.move(e.clientX - r.left, e.clientY - r.top, e.buttons > 0 || e.pointerType === 'touch'); } });
+  mgCanvas.addEventListener('pointercancel', e => { if (mgGame && mgGame.release) { const r = mgCanvas.getBoundingClientRect(); mgGame.release(e.clientX - r.left, e.clientY - r.top); } });
   mgCanvas.addEventListener('pointerup', e => { if (mgGame && mgGame.release) { const r = mgCanvas.getBoundingClientRect(); mgGame.release(e.clientX - r.left, e.clientY - r.top); } });
 
   // ---------- session ----------
   // ---------- multiplayer (net.js → window.CC_NET) ----------
   const NET = () => window.CC_NET;
   const online = () => !!(NET() && NET().ready);
+  const liveNow = () => online() && NET().status.live;          // false while the live map is paused
+  const netMissing = () => !NET() || NET().status.reason === 'unavailable';   // no multiplayer at all (preview / tests)
+  // points are also saved on the phone, so a reload while the network is down doesn't lose them
+  const savePoints = () => { try { if (me) localStorage.setItem('cc-points-' + me.id, String(points)); } catch (e) {} };
+  const loadPoints = m => { try { return +localStorage.getItem('cc-points-' + m.id) || 0; } catch (e) { return 0; } };
   const memberById = id => MEMBERS.find(m => m.id === id);
   const remotes = new Map();   // uid -> { m, x, y, tx, ty, bob, dir, s }
   function syncRemotes() {
-    if (!online()) return;
+    if (!liveNow()) { remotes.clear(); return; }     // paused: don't show people frozen in place
     const ps = NET().players, mine = NET().uid, seen = new Set();
     for (const uid in ps) {
       const r = ps[uid];
@@ -350,26 +370,64 @@
     npcs = [];
     if (me && !joinedNet) {
       joinedNet = true;
-      NET().join(me).then(start => { if (start > points) { points = start; updateHud(); } });
+      NET().join(me, points).then(start => { if (start > points) { points = start; updateHud(); savePoints(); } });
     }
     syncRemotes(); renderBoard();
   }
   let joinedNet = false;
-  window.addEventListener('cc-net-ready', () => { goOnline(); NET().onChange(() => { syncRemotes(); renderBoard(); }); });
+  document.addEventListener('visibilitychange', () => { if (joinedNet && NET()) NET().setOnline(!document.hidden); });
+  // the leaderboard DOM is only rebuilt when it's visible, at most twice a second (80 players move ~4×/s each)
+  let boardDirty = false, boardTimer = null;
+  function queueBoard() {
+    boardDirty = true;
+    if (boardTimer || !$('board-panel').classList.contains('show')) return;
+    boardTimer = setTimeout(() => { boardTimer = null; if (boardDirty) { boardDirty = false; renderBoard(); } }, 500);
+  }
+  window.addEventListener('cc-net-ready', () => { goOnline(); NET().onChange(() => { syncRemotes(); queueBoard(); }); });
   if (online()) setTimeout(() => window.dispatchEvent(new Event('cc-net-ready')), 0);
+
+  // ---------- "live map paused" badge + automatic slow-phone detection ----------
+  const PAUSE_TEXT = {
+    'connecting': '📡 Connecting… your games still count',
+    'connection': '📡 Live map paused (connection) · games & points still work',
+    'slow-network': '📡 Slow connection · live map limited · games still work',
+    'slow-phone': '⚡ Live map paused to keep your phone fast · tap to try again',
+  };
+  function showNetStatus() {
+    const b = $('net-badge'); if (!b) return;
+    const st = NET() && NET().status;
+    const show = st && !st.live && st.reason !== 'unavailable' && state === 'play' && !(st.reason === 'connecting' && !me);
+    b.textContent = show ? (PAUSE_TEXT[st.reason] || '📡 Live map paused') : '';
+    b.classList.toggle('show', !!show);
+    b.classList.toggle('tap', !!(show && st.reason === 'slow-phone'));
+    syncRemotes(); queueBoard();
+  }
+  window.addEventListener('cc-net-status', showNetStatus);
+  $('net-badge').onclick = () => { if (NET() && NET().status.reason === 'slow-phone') { fpsBad = 0; fpsGrace = 15; NET().resumeLive(); } };
+  // if the campus map drops below ~22 fps for 6 s while other players are showing, stop streaming them on this phone
+  let fpsAvg = 60, fpsBad = 0, fpsGrace = 8;
+  function watchFps(dt) {
+    if (!liveNow() || mgId || state !== 'play' || document.hidden || dt <= 0) return;
+    if (fpsGrace > 0) { fpsGrace -= dt; return; }
+    fpsAvg += (1 / Math.max(dt, 1 / 120) - fpsAvg) * 0.05;
+    fpsBad = fpsAvg < 22 && remotes.size > 3 ? fpsBad + dt : 0;
+    if (fpsBad > 6) { fpsBad = 0; NET().pauseLive('slow-phone'); }
+  }
 
   // live leaderboard (🏆 panel on phones, sidebar on the projector view)
   function renderBoard() {
     const box = $('board-list'); if (!box) return;
     let rows;
     if (online()) {
-      const ps = NET().players, byMember = {};
+      const ps = Object.assign({}, NET().players), byMember = {};
+      if (me && NET().uid) ps[NET().uid] = Object.assign({}, ps[NET().uid] || { m: me.id, n: me.name, on: true }, { p: Math.max(points, (ps[NET().uid] || {}).p || 0) });
       for (const uid in ps) { const r = ps[uid]; if (!r || !r.m) continue; const cur = byMember[r.m]; if (!cur || (r.p || 0) > (cur.p || 0) || r.on) byMember[r.m] = { ...r, p: Math.max(r.p || 0, cur ? cur.p || 0 : 0), on: r.on || (cur && cur.on) }; }
       rows = Object.values(byMember).sort((a, b) => (b.p || 0) - (a.p || 0));
-      $('board-status').textContent = `${rows.filter(r => r.on).length} playing now`;
+      $('board-status').textContent = NET().status.live ? `${rows.filter(r => r.on).length} playing now`
+        : NET().status.reason === 'slow-phone' ? 'Updates every 20 s' : 'Paused · will catch up';
     } else {
       rows = me ? [{ m: me.id, n: me.name, p: points, on: true }] : [];
-      $('board-status').textContent = 'Offline: scores aren’t shared';
+      $('board-status').textContent = netMissing() ? 'Offline: scores aren’t shared' : 'Connecting…';
     }
     box.innerHTML = '';
     rows.slice(0, 100).forEach((r, i) => {
@@ -383,9 +441,10 @@
 
   function pickMember(m) {
     me = m;
+    points = Math.max(points, loadPoints(m));
     if (online()) goOnline();
-    else {
-      // offline / not yet connected: a dozen other members wander campus as stand-ins for live players
+    else if (netMissing()) {
+      // no multiplayer at all (preview link / tests): a dozen other members wander campus as stand-ins
       const others = MEMBERS.filter(o => o !== m).sort(() => Math.random() - 0.5).slice(0, 12);
       npcs = others.map((o, i) => makeNpc(o, STATIONS[i % STATIONS.length].at));
     }
@@ -413,6 +472,7 @@
     state = 'play';
     $('start').classList.add('hidden');
     document.body.classList.add('playing');
+    showNetStatus();
     atStation = null; updateHud(); checkStation(); sfx('go');
   }
   $('start-btn').onclick = startSession;
@@ -622,7 +682,7 @@
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
     for (const n of npcs) moveNpc(n, dt);
-    moveRemotes(dt);
+    moveRemotes(dt); watchFps(dt);
     if (me && joinedNet && state === 'play') NET().send({ x: Math.round(player.x / CELL * 100) / 100, y: Math.round(player.y / CELL * 100) / 100,
       s: mgId ? 'g:' + mgId : (atStation ? atStation.id : '') });
     if (!mgId) { movePlayer(dt); if (state === 'play') checkStation(); updateNear(); }

@@ -46,7 +46,7 @@ window.MINIGAMES.scoop = {
       STEP = R * 1.22;
       CONE_H = R * 2.4;
       GROUND = H - (W < 600 ? Math.max(40, H * 0.08) : Math.max(24, H * 0.05));                  // screen y of cone tip
-      TOP = (W < 600 ? 60 : 12) + 84;                         // below HUD + our score panel
+      TOP = (W < 600 || H < 500 ? 60 : 12) + 84;           // below HUD (phones incl. landscape) + our score panel
       if (coneX === null) coneX = W / 2;
     }
     layout(W, H);
@@ -148,7 +148,6 @@ window.MINIGAMES.scoop = {
         ? `🍦 ${stack.length}-scoop tower! (${caught} caught, best combo ${bestCombo}${bonus ? `, +${bonus} height bonus` : ''})`
         : `💥 Toppled at ${maxH} scoops! (${caught} caught, best combo ${bestCombo})`;
       api.finish(score, detail);
-      window.__scoopDebug = { score, caught, maxH, bestCombo, perfects, toppled: !survived };
     }
 
     function startTopple() {
@@ -168,7 +167,6 @@ window.MINIGAMES.scoop = {
     }
 
     const game = {
-      get _dbg() { return { coneX, topX: topX(), items: items.map(i => ({ x: i.x, y: i.y, kind: i.kind })), scale, n: stack.length, wobble, score, t }; },
       update(dt) {
         if (done) return;
         layout(api.W || W, api.H || H);
@@ -368,7 +366,6 @@ window.MINIGAMES.scoop = {
         ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
       },
     };
-    window.__scoopGame = game;
     return game;
 
     function roundRect(ctx, x, y, w, h, r) {

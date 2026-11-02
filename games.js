@@ -4,6 +4,18 @@
    Each real game lives in games/<id>.js and replaces its placeholder below. */
 window.MINIGAMES = {};
 
+/* roundRect polyfill (iOS Safari < 16 doesn't have it, and the hub + several games use it) */
+if (typeof CanvasRenderingContext2D !== 'undefined' && !CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+    let rr = Array.isArray(r) ? (r[0] || 0) : (+r || 0);
+    if (w < 0) { x += w; w = -w; } if (h < 0) { y += h; h = -h; }
+    rr = Math.max(0, Math.min(rr, w / 2, h / 2));
+    this.moveTo(x + rr, y); this.arcTo(x + w, y, x + w, y + h, rr); this.arcTo(x + w, y + h, x, y + h, rr);
+    this.arcTo(x, y + h, x, y, rr); this.arcTo(x, y, x + w, y, rr); this.closePath();
+    return this;
+  };
+}
+
 /* Cougar Tail = a long maple bar. Shared icon (HTML) + canvas drawing helper. */
 window.MAPLE_BAR_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'
   + '<g transform="rotate(-35 32 32)">'

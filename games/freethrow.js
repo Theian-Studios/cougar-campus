@@ -423,7 +423,7 @@ window.MINIGAMES.freethrow = {
           ctx.fillStyle = 'rgba(125,255,155,.35)'; ctx.fillRect(mx, iy - mh * 0.035 / 1.3, mw, mh * 0.07 / 1.3);
           ctx.fillStyle = '#f5c842'; ctx.fillRect(mx - 6, iy - 1.5, mw + 12, 3);
           ctx.fillStyle = '#fff'; ctx.font = '800 11px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('PWR', mx + mw / 2, my + mh + 16);
-        } else if (!ending && !done && shots < 2) {
+        } else if (!ending && !done && shots < 2 && !flash) {
           const a = 0.5 + 0.5 * Math.sin(t * 5);
           ctx.fillStyle = `rgba(255,255,255,${0.5 + 0.5 * a})`; ctx.textAlign = 'center';
           const hint = shots === 0 ? '👆 Flick up from the ball!' : '👆 Keep shooting!';

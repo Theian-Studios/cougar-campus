@@ -47,7 +47,7 @@ window.MINIGAMES.sled = {
     function end(reason) {
       if (done) return; done = true;
       const s = score();
-      api.finish(s, `${reason} · ${Math.round(d * 2)} m · 🎟️×${coupons} · ${nears} close calls`);
+      api.finish(s, `${reason} · ${Math.round(d * 2)} m · 🎟️×${coupons} · ${nears} close call${nears === 1 ? "" : "s"}`);
     }
     function crash(o) {
       lives--; tumble = 0.9; inv = 2.4; shake = 1; flash = 1; speed *= 0.45;

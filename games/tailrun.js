@@ -208,7 +208,6 @@ window.MINIGAMES.tailrun = {
         if (t >= DUR) end(true);
       },
 
-      get _dbg() { return { foes, pickups, px, dist, L }; },
       tap(x) { if (done || endTimer >= 0) return; dragX = x; },
       move(x, y, isDown) {
         if (done || endTimer >= 0) return;

@@ -2,16 +2,16 @@
    Simon-style memory game. At night in the Bean Life Science Museum the stuffed
    animals "come to life" in a sequence; repeat it by tapping them (or keys 1–4).
    Sequence grows by one and plays faster each round. One wrong tap = they all
-   roar at you and the night is over. 45 s cap.
-   Score = 10 per correct tap + round bonus (25 + 15 × length). */
+   roar at you and the night is over. 27 s cap.
+   Score = 20 per correct tap + round bonus (50 + 30 × length). */
 window.MINIGAMES.bean = {
   name: 'Bean Museum After Dark',
   icon: '🦁',
   blurb: 'Remember who moved',
   howTo: 'Watch which exhibits come to life, then tap them in the same order (or keys 1–4).<br>Each round adds one more. One mistake and they all wake up… 27 s!',
   create(api) {
-    const DUR = 27, TAP_PTS = 10;
-    const bonusFor = n => 25 + 15 * n;
+    const DUR = 27, TAP_PTS = 20;
+    const bonusFor = n => 50 + 30 * n;
     const ANIMALS = [
       { e: '🦁', name: 'LION',  col: '#f5a623', freq: 220.0, type: 'sawtooth' },
       { e: '🐻', name: 'GRIZZLY', col: '#c0703a', freq: 277.2, type: 'square' },
@@ -34,8 +34,12 @@ window.MINIGAMES.bean = {
     let ac = null;
     function audio() {
       try {
-        if (!ac) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) ac = new AC(); }
-        if (ac && ac.state === 'suspended') ac.resume();
+        // one context shared across rounds (iOS caps how many AudioContexts a page may create)
+        if (!ac || ac.state === 'closed') {
+          ac = window.__beanAC && window.__beanAC.state !== 'closed' ? window.__beanAC : null;
+          if (!ac) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) ac = window.__beanAC = new AC(); }
+        }
+        if (ac && ac.state !== 'running') { const p = ac.resume(); if (p && p.catch) p.catch(() => {}); }
       } catch (e) { ac = null; }
       return ac;
     }
@@ -107,7 +111,7 @@ window.MINIGAMES.bean = {
 
     function layout(W, H) {
       const top = 170, botPad = W < 700 ? 90 : 40;
-      const availH = H - top - botPad, availW = W - 24;
+      const availH = Math.max(120, H - top - botPad), availW = Math.max(120, W - 24);
       const row = W / H > 1.25 && availW / 4 > 120;
       const cols = row ? 4 : 2, rows = row ? 1 : 2;
       const gap = Math.min(22, W * 0.04);
@@ -120,7 +124,6 @@ window.MINIGAMES.bean = {
     }
 
     return {
-      get _dbg() { return { seq, phase, step, round, score, lit: lit.slice() }; },
       update(dt) {
         shake = Math.max(0, shake - dt * 1.5); flash = Math.max(0, flash - dt * 2);
         bannerT = Math.max(0, bannerT - dt);
@@ -166,7 +169,7 @@ window.MINIGAMES.bean = {
         }
       },
       move(x, y) { if (!done && phase === 'input') { light.tx = x / lastW; light.ty = y / lastH; } },
-      release() {},
+      release() { if (!done) audio(); }, // iOS unlocks audio on touchend/pointerup
       key(k, isDown, isRepeat) {
         if (!isDown || isRepeat) return;
         const i = '1234'.indexOf(k);

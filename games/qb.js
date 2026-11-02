@@ -517,9 +517,6 @@ window.MINIGAMES.qb = {
         ctx.restore();
         ctx.textAlign = 'left';
       },
-
-      // test hook (read-only snapshot)
-      _debug() { return { tally, phase, t, score, strikes, comps, att, recv: recv.map(r => ({ x: r.x, y: r.y, vx: r.vx, vy: r.vy })), defs: defs.map(d => ({ x: d.x, y: d.y })), S, QX, QSY, W, H }; },
     };
   },
 };

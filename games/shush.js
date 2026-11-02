@@ -134,7 +134,7 @@ window.MINIGAMES.shush = {
         // ---- layout ----
         const fs = Math.min(22, W * 0.052), hy = 66, hh = fs * 2.1;
         const top = hy + hh + 12, bottom = H - (W < 700 ? 74 : 20);
-        const availW = Math.min(W - 24, 1000), availH = bottom - top;
+        const availW = Math.max(120, Math.min(W - 24, 1000)), availH = Math.max(120, bottom - top);
         const wantCols = W / H > 1.05 ? 4 : 3, wantRows = availH / availW > 1.35 ? 4 : 3;
         if (wantCols !== cols || wantRows !== rows) { cols = wantCols; rows = wantRows; makeCells(cols * rows); }
         const cw = Math.min(availW / cols, (availH / rows) * 1.1), ch = Math.min(availH / rows, cw * 1.15);
